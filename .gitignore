@@ -1,0 +1,7 @@
+*.pyc
+**/\.idea/
+
+capsule_pytorch/mnist/**
+capsule_pytorch/logs/**
+
+capsule_example/**
