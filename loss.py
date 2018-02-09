@@ -14,7 +14,7 @@ class CapsuleLoss(_Loss):
         self.num_classes = num_classes
         self.alpha = alpha
 
-        self.reconstruction_loss = nn.MSELoss(size_average=False)
+        self.reconstruction_loss = nn.MSELoss(size_average=size_average)
 
     def forward(self, images, labels, class_probs, reconstructions):
         labels_one_hot = one_hot(labels, self.num_classes)
@@ -22,11 +22,10 @@ class CapsuleLoss(_Loss):
         absent_loss = F.relu(class_probs - self.m_min, inplace=True) ** 2
 
         margin_loss = labels_one_hot * present_loss + 0.5 * (1. - labels_one_hot) * absent_loss
-        # margin_loss = margin_loss.sum()
-        margin_loss = margin_loss.sum() / images.size(0)
+        margin_loss_per_sample = margin_loss.sum(dim=1)
+        margin_loss = margin_loss_per_sample.mean() if self.size_average else margin_loss_per_sample.sum()
         reconstruction_loss = self.reconstruction_loss(reconstructions, images)
 
         total_loss = margin_loss + self.alpha * reconstruction_loss
         return total_loss, margin_loss, reconstruction_loss * self.alpha
-        # return total_loss / image s.size(0) if self.size_average else total_loss
 
