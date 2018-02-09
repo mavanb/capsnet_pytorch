@@ -27,7 +27,7 @@ def new_grid_size(old_height, old_width, stride, kernel_size, padding):
 def squash(tensor, dim=-1):
     #todo check if safe norm is required here: not present in pytorch githubs
     squared_norm = (tensor ** 2).sum(dim=dim, keepdim=True)
-    scale = squared_norm / (1 + squared_norm)
+    scale = squared_norm / (1. + squared_norm)
     return scale * tensor / torch.sqrt(squared_norm)
 
 
@@ -59,7 +59,7 @@ def dynamic_routing(u_hat, iters=3):
     b_vec = variable(torch.zeros(b, i, j))
     for _ in range(iters):
         # softmax of j
-        c_vec = torch.nn.Softmax(dim=2)(b_vec)
+        c_vec = torch.nn.Softmax(dim=1)(b_vec)
 
         # in einsum: "bij, bjin-> bjn"
         s_vec = torch.matmul(c_vec.view(b, j, 1, i), u_hat).squeeze()

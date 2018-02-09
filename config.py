@@ -1,6 +1,5 @@
-batch_size = 100
+batch_size = 50
 epochs = 5
-learning_rate = 0.01
 
 m_plus = 0.9
 m_min = 0.1

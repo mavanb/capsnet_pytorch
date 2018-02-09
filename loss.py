@@ -18,15 +18,15 @@ class CapsuleLoss(_Loss):
 
     def forward(self, images, labels, class_probs, reconstructions):
         labels_one_hot = one_hot(labels, self.num_classes)
-        left = F.relu(self.m_plus - class_probs, inplace=True) ** 2
-        right = F.relu(class_probs - self.m_min, inplace=True) ** 2
+        present_loss = F.relu(self.m_plus - class_probs, inplace=True) ** 2
+        absent_loss = F.relu(class_probs - self.m_min, inplace=True) ** 2
 
-        margin_loss = labels_one_hot * left + 0.5 * (1. - labels_one_hot) * right
-        margin_loss = margin_loss.sum()
-
+        margin_loss = labels_one_hot * present_loss + 0.5 * (1. - labels_one_hot) * absent_loss
+        # margin_loss = margin_loss.sum()
+        margin_loss = margin_loss.sum() / images.size(0)
         reconstruction_loss = self.reconstruction_loss(reconstructions, images)
 
         total_loss = margin_loss + self.alpha * reconstruction_loss
-
-        return total_loss / images.size(0) if self.size_average else total_loss
+        return total_loss, margin_loss, reconstruction_loss * self.alpha
+        # return total_loss / image s.size(0) if self.size_average else total_loss
 
