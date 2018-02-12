@@ -57,7 +57,7 @@ def dynamic_routing(u_hat, iters=3):
     """
     b, j, i, n = u_hat.shape
     b_vec = variable(torch.zeros(b, j, i))
-    for _ in range(iters):
+    for index in range(iters):
         # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
         c_vec = torch.nn.Softmax(dim=2)(b_vec)
 
@@ -66,10 +66,11 @@ def dynamic_routing(u_hat, iters=3):
         s_vec = torch.matmul(c_vec.view(b, j, 1, i), u_hat).squeeze()
         v_vec = squash(s_vec)
 
-        # in einsum: "bjin, bjn-> bij", inner product over n
-        # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
-        # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
-        b_vec = b_vec + torch.matmul(u_hat.view(b, j, i, 1, n), v_vec.view(b, j, 1, n, 1)).squeeze()
+        if index < (iters - 1): # skip update last iter
+            # in einsum: "bjin, bjn-> bij", inner product over n
+            # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
+            # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
+            b_vec = b_vec + torch.matmul(u_hat.view(b, j, i, 1, n), v_vec.view(b, j, 1, n, 1)).squeeze()
     return v_vec
 
 

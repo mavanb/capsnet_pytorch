@@ -3,6 +3,7 @@ from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer
 from utils import one_hot, new_grid_size
+import torch.nn.functional as F
 
 
 class _CapsNet(nn.Module):
@@ -29,23 +30,19 @@ class _CapsNet(nn.Module):
         _, index_max = probs.max(dim=1, keepdim=False)
         return index_max.squeeze()
 
-    def create_decoder_input(self, training, labels):
+    def create_decoder_input(self, final_caps, labels=None):
         """ Construct decoder input based on class probs and final capsules.
         Flattens capsules to [batch_size, num_final_caps * dim_final_caps] and sets all values which do not come from
         the correct class/capsule to zero (masks). During training the labels are used to masks, during inference the
         max of the class probabilities.
-        :param training: boolean to indicate if training
-        :param labels: [batch_size, 1]
+        :param labels: [batch_size, 1], if None: use predictions
         :return: [batch_size, num_final_caps * dim_final_caps]
         """
-        if self.final_caps is None or self.probs is None:
-            raise NameError("Forward pass has not been ran yet.")
-        self.compute_predictions(self.probs)
-        targets = labels if training else self.compute_predictions(self.probs)
+        targets = labels if type(labels) == Variable else self.compute_predictions(self.compute_probs(final_caps))
         masks = one_hot(targets, self.num_final_caps)
         ##todo check if cuda has to be called, make one hot for variables
-        masked_caps = self.final_caps * masks[:, :, None]
-        decoder_input = masked_caps.view(self.final_caps.shape[0], -1)
+        masked_caps = final_caps * masks[:, :, None]
+        decoder_input = masked_caps.view(final_caps.shape[0], -1)
         return decoder_input
 
     def compute_acc(self, probs, label):
@@ -79,10 +76,6 @@ class BasicCapsNet(_CapsNet):
                  in_width):
         super().__init__(digit_caps)
 
-        self.in_channels = in_channels
-        self.in_width = in_width
-        self.in_height = in_height
-
         # initial convolution
         conv_channels = prim_caps * vec_len_prim
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
@@ -98,19 +91,9 @@ class BasicCapsNet(_CapsNet):
         self.dense_caps_layer = DenseCapsuleLayer(in_channels_dense_layer, digit_caps, vec_len_prim,
                                                   vec_len_digit, routing_iters)
 
-        self.decoder = nn.Sequential(
-            nn.Linear(vec_len_digit * digit_caps, 512),
-            nn.ReLU(inplace=True),
-            nn.Linear(512, 1024),
-            nn.ReLU(inplace=True),
-            nn.Linear(1024, in_channels*in_height*in_width),
-            nn.Sigmoid()
-        )
+        self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
-        self.final_caps = None
-        self.probs = None
-
-    def forward(self, x, t=None, train=True):
+    def forward(self, x, t=None):
         # apply conv layer
         conv1 = self.relu(self.conv1(x))
 
@@ -122,14 +105,63 @@ class BasicCapsNet(_CapsNet):
         primary_caps_flat = primary_caps.view(b, c*w*h, m)
 
         # compute digit capsules
-        self.final_caps = self.dense_caps_layer(primary_caps_flat)
+        final_caps = self.dense_caps_layer(primary_caps_flat)
 
-        self.probs = self.compute_probs(self.final_caps)
+        probs = self.compute_probs(final_caps)
 
-        decoder_input = self.create_decoder_input(train, t)
-        recon = self.decoder(decoder_input).view(-1, self.in_channels, self.in_height, self.in_width)
+        decoder_input = self.create_decoder_input(final_caps, t)
+        recon = self.decoder(decoder_input)
 
-        return self.probs, recon
+        return probs, recon, final_caps
+
+
+class BaselineCNN(nn.Module):
+    """
+    Note: the paper (Hinton 2017) mentions a slightly different architecture than in the source code:
+    https://github.com/Sarasra/models/blob/master/research/capsules/models/conv_model.py
+    """
+    def __init__(self, classes, in_channels, in_height, in_width):
+        super(BaselineCNN, self).__init__()
+
+        self.conv1 = nn.Conv2d(in_channels, 256, kernel_size=5)
+        self.conv2 = nn.Conv2d(256, 256, kernel_size=5)
+        self.conv3 = nn.Conv2d(256, 128, kernel_size=5)
+        self.fc1 = nn.Linear(128 * in_height, in_width, 328)
+        self.fc2 = nn.Linear(328, 192)
+        self.fc3 = nn.Linear(192, classes)
+
+    def forward(self, x, training=False):
+        x = self.conv1(x)
+        x = F.relu(F.max_pool2d(x, kernel_size=2, stride=2, padding=0))
+        x = F.relu(F.max_pool2d(self.conv2(x), kernel_size=2, stride=2, padding=0))
+        x = F.relu(F.max_pool2d(self.conv3(x), kernel_size=2, stride=2, padding=0))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(F.dropout(self.fc3(x), training=training))
+        return F.log_softmax(x, dim=1)
+
+
+class CapsNetDecoder(nn.Module):
+
+    def __init__(self, vec_len_digit, digit_caps, in_channels, in_height, in_width):
+        super(CapsNetDecoder, self).__init__()
+
+        self.in_channels = in_channels
+        self.in_height = in_height
+        self.in_width = in_width
+
+        self.flat_reconstruction = nn.Sequential(
+            nn.Linear(vec_len_digit * digit_caps, 512),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, 1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024, in_channels * in_height * in_width),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x = self.flat_reconstruction(x).view(-1, self.in_channels, self.in_height, self.in_width)
+        return x
 
 
 if __name__ == '__main__':

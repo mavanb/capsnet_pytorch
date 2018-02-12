@@ -1,0 +1,122 @@
+import os
+import argparse
+import torch
+import torch.utils.data as Data
+import torchvision
+from utils import variable
+from loss import CapsuleLoss
+import numpy as np
+import torch.nn.functional as F
+from nets import BaselineCNN
+
+
+def main(conf):
+
+    if conf.seed:
+        torch.manual_seed(42)
+        np.random.seed(42)
+
+    kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
+    train_data = torchvision.datasets.MNIST(root='./mnist', train=True, transform=torchvision.transforms.ToTensor(),
+                                            download=True)
+    train_loader = Data.DataLoader(dataset=train_data, batch_size=conf.batch_size, shuffle=True, **kwargs)
+
+    test_data = torchvision.datasets.MNIST(root='./mnist', train=False, transform=torchvision.transforms.ToTensor(),
+                                           download=True)
+    test_loader = Data.DataLoader(dataset=test_data, batch_size=conf.batch_size, shuffle=False, **kwargs)
+
+    model = BaselineCNN(classes=10, in_channels=1, in_height=28, in_width=28)
+
+    if torch.cuda.is_available():
+        model.cuda()
+
+    optimizer = torch.optim.Adam(model.parameters())
+
+    iters = len(train_loader)
+    iters_valid = len(test_loader)
+    best_loss = np.infty
+
+    # loop over epochs
+    for epoch in range(conf.epochs):
+
+        # loop over train batches
+        for iter, (data_batch, label_batch) in enumerate(train_loader):
+
+            if conf.debug and iter > 2:
+                break
+
+            data = variable(data_batch)
+            labels = variable(label_batch)
+
+            output = model(data)
+            loss = F.nll_loss(output, labels)
+            model.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            print("\rEpoch: {}  Iteration: {}/{} ({:.1f}%)  Total loss: {:.5f}".format(epoch, iter + 1, iters,
+                                                                            iter * 100 / iters, loss.data[0]), end="")
+
+        # loop over valid batches, compute average loss and accuracy todo: use valid data instead of test here
+        acc_values = []
+        loss_values = []
+        for iter, (data_batch, label_batch) in enumerate(test_loader):
+
+            if conf.debug and iter > 2:
+                break
+
+            data = variable(data_batch)
+            labels = variable(label_batch)
+
+            class_probs, reconstruction, _ = model(data)
+
+            acc = model.compute_acc(class_probs, labels)
+            acc_values.append(acc)
+
+            loss, _, _ = capsule_loss(data, labels, class_probs, reconstruction)
+            loss_values.append(loss.data[0])
+            print("\rEvaluating the model: {}/{} ({:.1f}%)".format(iter + 1, iters_valid, iter * 100 / iters_valid),
+                  end=" " * 10)
+
+        acc_mean = np.mean(acc_values)
+        loss_mean = np.mean(loss_values)
+
+        print("\rEpoch: {}  Validation accuracy: {:.4f}% {}".format(epoch, acc_mean * 100,
+                                                                    " (loss improved)" if loss_mean < best_loss else ""))
+
+        # early stop after one non-improved epoch
+        if loss_mean < best_loss:
+            best_loss = loss_mean
+        else:
+            break
+
+        # do one epoch in debug mode
+        if conf.debug:
+            break
+
+    # save fully trained model, can not be used to resume training
+    if conf.save_trained:
+        if not os.path.exists(conf.trained_model_path):
+            os.makedirs(conf.trained_model_path)
+        torch.save(model.state_dict(), conf.model_save_path)
+
+
+if __name__ == '__main__':
+    # Command line arguments
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--seed', type=int, default=None, help="Torch and numpy random seed. To ensure repeatability.")
+    parser.add_argument('--trained_model_path', type=str, default="./trained_models", help='Path of checkpoints.')
+    parser.add_argument('--save_trained', type=bool, default=True, help='Save fully trained model for inference.')
+    parser.add_argument('--model_name', type=str, default="simple", help='Name of the model.')
+    parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
+    parser.add_argument('--batch_size', type=int, default=50, help='Batch size.')
+    parser.add_argument('--debug', type=bool, default=False, help="debug mode: break early")
+
+    config = parser.parse_args()
+
+    # combined configs
+    config.model_save_path = "{}/{}".format(config.trained_model_path, config.model_name)
+
+    main(config)
+
