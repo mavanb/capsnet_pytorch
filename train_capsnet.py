@@ -9,13 +9,11 @@ from loss import CapsuleLoss
 import numpy as np
 import time
 
+
 def main(conf):
 
-    if conf.seed:
-        torch.manual_seed(42)
-        np.random.seed(42)
 
-    kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
+
     train_data = torchvision.datasets.MNIST(root='./mnist', train=True, transform=torchvision.transforms.ToTensor(),
                                             download=True)
     train_loader = Data.DataLoader(dataset=train_data, batch_size=conf.batch_size, shuffle=True, **kwargs)
@@ -31,6 +29,9 @@ def main(conf):
     if torch.cuda.is_available():
         model.cuda()
 
+    if conf.load:
+        model = torch.load(conf.model_checkpoint_path)
+
     optimizer = torch.optim.Adam(model.parameters())
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=10)
 
@@ -39,7 +40,7 @@ def main(conf):
     best_loss = np.infty
 
     # loop over epochs
-    for epoch in range(conf.epochs):
+    for epoch in range(model.epoch, conf.epochs):
 
         # loop over train batches
         start = time.time()
@@ -93,22 +94,19 @@ def main(conf):
         print("\rEpoch: {}  Validation accuracy: {:.4f}% {}".format(epoch, acc_mean * 100,
                                                                     " (loss improved)" if loss_mean < best_loss else ""))
 
+        # store epoch
+        model.epoch += 1
+
         # early stop after one non-improved epoch
         if loss_mean < best_loss:
             best_loss = loss_mean
+
+            if conf.save_trained:
+                if not os.path.exists(conf.trained_model_path):
+                    os.makedirs(conf.trained_model_path)
+                torch.save(model, conf.model_checkpoint_path)
         else:
             break
-
-        # do one epoch in debug mode
-        if conf.debug:
-            break
-
-    # save fully trained model, can not be used to resume training
-    if conf.save_trained:
-        if not os.path.exists(conf.trained_model_path):
-            os.makedirs(conf.trained_model_path)
-        # torch.save(model.state_dict(), conf.model_save_path)
-        torch.save(model, conf.model_save_path)
 
 
 if __name__ == '__main__':
@@ -124,6 +122,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_type', type=str, default="simple_caps_net", help='simple_caps_net or toy_caps_net')
     parser.add_argument('--debug', type=bool, default=False, help="debug mode: break early")
     parser.add_argument('--print_time', type=bool, default=False, help="print train time per sample")
+    parser.add_argument('--load', type=bool, default=False, help="load previously trained model")
 
     # loss params
     parser.add_argument('--alpha', type=float, default=0.025, help="Alpha of CapsuleLoss")
@@ -133,11 +132,10 @@ if __name__ == '__main__':
     config = parser.parse_args()
 
     # combined configs
-    config.model_save_path = "{}/{}".format(config.trained_model_path, config.model_name)
+    config.model_checkpoint_path = "{}/{}".format(config.trained_model_path, config.model_name)
 
     # temp configs
-    # config.epochs = 1
-    config.print_time = True
+    # configurations.epochs = 3
 
     main(config)
 

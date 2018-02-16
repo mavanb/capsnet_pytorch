@@ -8,8 +8,8 @@ import torch
 from torch.utils.data.sampler import SubsetRandomSampler
 
 
-def get_train_valid_test(data_set, batch_size, random_seed, valid_size=0.1, shuffle=True, num_workers=4,
-                         pin_memory=False):
+def get_train_valid_data(data_set, batch_size, random_seed=None, valid_size=0.1, shuffle=True, num_workers=4,
+                         pin_memory=False, train_max=None, valid_max=None):
     """
     Utility function for loading and returning train, valid and test data.
     If using CUDA, num_workers should be set to 1 and pin_memory to True.
@@ -25,6 +25,8 @@ def get_train_valid_test(data_set, batch_size, random_seed, valid_size=0.1, shuf
     - num_workers: number of subprocesses to use when loading the dataset.
     - pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
       True if using GPU.
+    - train_max: Maximum number of samples in train set, mostly for debugging purposes
+    - valid_max:  .. in valid set, ..
 
     Returns: train and valid dataloader
     """
@@ -40,6 +42,14 @@ def get_train_valid_test(data_set, batch_size, random_seed, valid_size=0.1, shuf
         np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[split:], indices[:split]
+
+    # limit number of train / valid samples
+    if train_max:
+        assert (train_max * batch_size < len(train_idx)), "train_max should be lower than number of samples in train set"
+        train_idx = train_idx[:train_max * batch_size]
+    if valid_max:
+        assert (valid_max * batch_size < len(valid_idx)), "valid_max should be lower than number of samples in valid set"
+        valid_idx = valid_idx[:valid_max * batch_size]
 
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)

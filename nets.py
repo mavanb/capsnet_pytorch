@@ -12,6 +12,7 @@ class _CapsNet(nn.Module):
     def __init__(self, num_final_caps):
         super().__init__()
         self.num_final_caps = num_final_caps
+        self.epoch = 0
 
     @staticmethod
     def compute_probs(caps):
@@ -130,14 +131,14 @@ class BaselineCNN(nn.Module):
         self.fc2 = nn.Linear(328, 192)
         self.fc3 = nn.Linear(192, classes)
 
-    def forward(self, x, training=False):
+    def forward(self, x):
         x = self.conv1(x)
         x = F.relu(F.max_pool2d(x, kernel_size=2, stride=2, padding=0))
         x = F.relu(F.max_pool2d(self.conv2(x), kernel_size=2, stride=2, padding=0))
         x = F.relu(F.max_pool2d(self.conv3(x), kernel_size=2, stride=2, padding=0))
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(F.dropout(self.fc3(x), training=training))
+        x = F.relu(F.dropout(self.fc3(x), training=self.training))
         return F.log_softmax(x, dim=1)
 
 
