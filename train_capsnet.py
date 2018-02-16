@@ -24,6 +24,7 @@ from ignite_features.runners import default_run
 def custom_args(parser):
     parser.add('--basic_capsnet_config', is_config_file=True, default="configurations/basic_capsnet.conf",
           help='configurations file path')
+    parser.add_argument('--model_name', type=str, default="simple_caps_net", help='Name of the model.')
     parser.add_argument('--alpha', type=float, required=True, help="Alpha of CapsuleLoss")
     parser.add_argument('--m_plus', type=float, required=True, help="m_plus of margin loss")
     parser.add_argument('--m_min', type=float, required=True, help="m_min of margin loss")
