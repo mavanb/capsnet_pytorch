@@ -2,25 +2,15 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer
-from utils import one_hot, new_grid_size
+from utils import one_hot, new_grid_size, padding_same_tf
 import torch.nn.functional as F
 
 
-class _CapsNet(nn.Module):
-    """ Abstract CapsuleNet class."""
+class _Net(nn.Module):
 
-    def __init__(self, num_final_caps):
+    def __init__(self):
         super().__init__()
-        self.num_final_caps = num_final_caps
         self.epoch = 0
-
-    @staticmethod
-    def compute_probs(caps):
-        """ Compute class probabilities from the capsule/vector length.
-        :param caps: capsules of shape [batch_size, num_capsules, dim_capsules]
-        :returns probs of shape [batch_size, num_capsules]
-        """
-        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False))
 
     @staticmethod
     def compute_predictions(probs):
@@ -30,6 +20,30 @@ class _CapsNet(nn.Module):
         """
         _, index_max = probs.max(dim=1, keepdim=False)
         return index_max.squeeze()
+
+    def compute_acc(self, probs, label):
+        """ Compute accuracy of batch
+        :param probs: [batch_size, classes]
+        :param label: [batch_size]
+        :return: batch accurarcy (float)
+        """
+        return sum(self.compute_predictions(probs).data == label.data) / probs.size(0)
+
+
+class _CapsNet(_Net):
+    """ Abstract CapsuleNet class."""
+
+    def __init__(self, num_final_caps):
+        super().__init__()
+        self.num_final_caps = num_final_caps
+
+    @staticmethod
+    def compute_probs(caps):
+        """ Compute class probabilities from the capsule/vector length.
+        :param caps: capsules of shape [batch_size, num_capsules, dim_capsules]
+        :returns probs of shape [batch_size, num_capsules]
+        """
+        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False))
 
     def create_decoder_input(self, final_caps, labels=None):
         """ Construct decoder input based on class probs and final capsules.
@@ -45,14 +59,6 @@ class _CapsNet(nn.Module):
         masked_caps = final_caps * masks[:, :, None]
         decoder_input = masked_caps.view(final_caps.shape[0], -1)
         return decoder_input
-
-    def compute_acc(self, probs, label):
-        """ Compute accuracy of batch
-        :param probs: [batch_size, classes]
-        :param label: [batch_size]
-        :return: batch accurarcy (float)
-        """
-        return sum(self.compute_predictions(probs).data == label.data) / probs.size(0)
 
 
 class BasicCapsNet(_CapsNet):
@@ -87,7 +93,7 @@ class BasicCapsNet(_CapsNet):
         self.primary_caps_layer = Conv2dPrimaryLayer(in_channels=conv_channels, out_channels=prim_caps, vec_len=vec_len_prim)
 
         # grid of multiple primary caps channels is flattend, number of new channels: grid * point * channels in grid
-        new_height, new_width = new_grid_size(*new_grid_size(in_height, in_width, 1, 9, 0), 2, 9, 0)
+        new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_channels_dense_layer = new_height * new_width * prim_caps
         self.dense_caps_layer = DenseCapsuleLayer(in_channels_dense_layer, digit_caps, vec_len_prim,
                                                   vec_len_digit, routing_iters)
@@ -116,29 +122,39 @@ class BasicCapsNet(_CapsNet):
         return probs, recon, final_caps
 
 
-class BaselineCNN(nn.Module):
+class BaselineCNN(_Net):
     """
-    Note: the paper (Hinton 2017) mentions a slightly different architecture than in the source code:
-    https://github.com/Sarasra/models/blob/master/research/capsules/models/conv_model.py
+    Convnet as implemented in https://github.com/Sarasra/models/blob/master/research/capsules/models/conv_model.py.
+    The paper (Hinton 2017) mentions a slightly different architecture than in the source code.
     """
     def __init__(self, classes, in_channels, in_height, in_width):
         super(BaselineCNN, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels, 256, kernel_size=5)
-        self.conv2 = nn.Conv2d(256, 256, kernel_size=5)
-        self.conv3 = nn.Conv2d(256, 128, kernel_size=5)
-        self.fc1 = nn.Linear(128 * in_height, in_width, 328)
-        self.fc2 = nn.Linear(328, 192)
+        self.conv1 = nn.Conv2d(in_channels, 512, kernel_size=5)
+        grid1_conv = new_grid_size((in_height, in_width), kernel_size=5)
+        self.max_pool1 = nn.MaxPool2d(kernel_size=2, stride=2, padding=padding_same_tf(grid1_conv, 2, 2))
+        grid1_pool = new_grid_size(grid1_conv, kernel_size=2, stride=2)
+
+        self.conv2 = nn.Conv2d(512, 256, kernel_size=5)
+        grid2_conv = new_grid_size(grid1_pool, kernel_size=5)
+        self.max_pool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=padding_same_tf(grid2_conv, 2, 2))
+        grid2_pool = new_grid_size(grid2_conv, kernel_size=2, stride=2)
+        self.grid2_flat = grid2_pool[0] * grid2_pool[1] * 256
+
+        self.fc1 = nn.Linear(self.grid2_flat, 1024)
+        self.fc2 = nn.Linear(1024, 10)
         self.fc3 = nn.Linear(192, classes)
+
+        self.epoch = 0
 
     def forward(self, x):
         x = self.conv1(x)
-        x = F.relu(F.max_pool2d(x, kernel_size=2, stride=2, padding=0))
-        x = F.relu(F.max_pool2d(self.conv2(x), kernel_size=2, stride=2, padding=0))
-        x = F.relu(F.max_pool2d(self.conv3(x), kernel_size=2, stride=2, padding=0))
+        x = F.relu(self.max_pool1(x))
+        x = self.conv2(x)
+        x = F.relu(self.max_pool2(x))
+        x = x.view(-1, self.grid2_flat)
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(F.dropout(self.fc3(x), training=self.training))
+        x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
 

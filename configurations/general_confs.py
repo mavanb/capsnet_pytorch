@@ -7,7 +7,6 @@ p.add('--general_config', is_config_file=True, default="configurations/general.c
 
 # required arguments: specified in configurations file or in
 p.add_argument('--trained_model_path', required=True, type=str, help='Path of checkpoints.')
-p.add_argument('--model_name', type=str, required=True, help='Name of the model.')
 p.add_argument('--batch_size', type=int, required=True, help='Batch size.')
 p.add_argument('--epochs', type=int, required=True, help='Number of epochs')
 

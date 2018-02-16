@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
-
+import math
 
 def variable(tensor, volatile=False):
     if torch.cuda.is_available():
@@ -15,13 +15,21 @@ def parameter(tensor):
     return nn.Parameter(tensor)
 
 
-def new_grid_size(old_height, old_width, stride, kernel_size, padding):
+def new_grid_size(grid, kernel_size, stride=1, padding=0):
     """ Calculate new images size after convoling.
     Used formula from: https://adeshpande3.github.io/A-Beginner%27s-Guide-To-Understanding-Convolutional-Neural-
     Networks-Part-2/
     """
     def calc(x): return int((x - kernel_size + 2 * padding)/stride + 1)
-    return calc(old_height), calc(old_width)
+    return calc(grid[0]), calc(grid[1])
+
+
+def padding_same_tf(grid, kernel, stride):
+    """ TensorFlow padding SAME corresponds to padding such that: output size = ceil(input/stride)"""
+    def calc(x):
+        out_size = math.ceil(x / stride)
+        return int(((out_size - 1) * stride + kernel - x) / 2)
+    return calc(grid[0]), calc(grid[1])
 
 
 def squash(tensor, dim=-1):

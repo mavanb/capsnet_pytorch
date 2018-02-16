@@ -4,6 +4,7 @@ import os
 
 
 def get_plot_training_loss_handler(vis, plot_every, transform=lambda x: x, window_size=100):
+
     train_loss_plot_window = vis.line(X=np.array([1]), Y=np.array([np.nan]),
                                       opts=dict(
                                           xlabel='# Iterations',
@@ -21,14 +22,13 @@ def get_plot_training_loss_handler(vis, plot_every, transform=lambda x: x, windo
     return plot_training_loss_to_visdom
 
 
-def get_plot_validation_accuracy_handler(vis):
+def get_plot_validation_accuracy_handler(vis, transform=lambda x: x):
     val_accuracy_plot_window = vis.line(X=np.array([1]), Y=np.array([np.nan]),
                                         opts=dict(
                                             xlabel='# Epochs',
                                             ylabel='Accuracy',
                                             title='Validation Accuracy')
                                         )
-
     def plot_val_accuracy_to_visdom(evaluator, trainer, model):
         accuracy = sum([accuracy for (loss, accuracy, epoch) in evaluator.history if epoch is model.epoch])
         accuracy = (accuracy * 100.) / len(evaluator.dataloader.dataset)
