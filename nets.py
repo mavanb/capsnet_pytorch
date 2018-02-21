@@ -1,8 +1,8 @@
 import torch
 from torch.autograd import Variable
 from torch import nn
-from layers import Conv2dPrimaryLayer, DenseCapsuleLayer
-from utils import one_hot, new_grid_size, padding_same_tf
+from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer
+from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing
 import torch.nn.functional as F
 
 
@@ -61,6 +61,40 @@ class _CapsNet(_Net):
         return decoder_input
 
 
+class ToyCapsNet(_CapsNet):
+
+    def __init__(self, in_features, final_caps, vec_len_prim, vec_len_final, routing_iters, prim_caps):
+        super().__init__(final_caps)
+        self.routing_iters = routing_iters
+        self.primary_caps_layer = LinearPrimaryLayer(in_features, prim_caps, vec_len_prim)
+        self.dense_caps_layer = DenseCapsuleLayer(prim_caps, final_caps, vec_len_prim,
+                                                  vec_len_final, routing_iters)
+
+        self.dynamic_routing = None
+
+        self.decoder = nn.Sequential(
+            nn.Linear(vec_len_final * final_caps, 52),
+            nn.ReLU(inplace=True),
+            nn.Linear(52, in_features),
+        )
+
+    def forward(self, x, t=None):
+
+        # compute grid of capsules
+        primary_caps = self.primary_caps_layer(x)
+
+        # for each capsule in primary layer compute prediction for all next layer capsules
+        all_final_caps = self.dense_caps_layer(primary_caps)
+
+        # compute digit capsules
+        final_caps, routing_point = self.dynamic_routing(all_final_caps, self.routing_iters)
+        probs = self.compute_probs(final_caps)
+        decoder_input = self.create_decoder_input(final_caps, t)
+        recon = self.decoder(decoder_input)
+
+        return probs, recon, final_caps, routing_point
+
+
 class BasicCapsNet(_CapsNet):
     """ Implements a CapsNet based using the architecture described in Dynamic Routing Hinton 2017.
 
@@ -83,6 +117,8 @@ class BasicCapsNet(_CapsNet):
                  in_width):
         super().__init__(digit_caps)
 
+        self.routing_iters = routing_iters
+
         # initial convolution
         conv_channels = prim_caps * vec_len_prim
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
@@ -94,9 +130,11 @@ class BasicCapsNet(_CapsNet):
 
         # grid of multiple primary caps channels is flattend, number of new channels: grid * point * channels in grid
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
-        in_channels_dense_layer = new_height * new_width * prim_caps
-        self.dense_caps_layer = DenseCapsuleLayer(in_channels_dense_layer, digit_caps, vec_len_prim,
+        in_features_dense_layer = new_height * new_width * prim_caps
+        self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
                                                   vec_len_digit, routing_iters)
+
+        self.dynamic_routing = dynamic_routing
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
@@ -111,8 +149,11 @@ class BasicCapsNet(_CapsNet):
         b, c, w, h, m = primary_caps.shape
         primary_caps_flat = primary_caps.view(b, c*w*h, m)
 
+        # for each capsule in primary layer compute prediction for all next layer capsules
+        all_final_caps = self.dense_caps_layer(primary_caps_flat)
+
         # compute digit capsules
-        final_caps = self.dense_caps_layer(primary_caps_flat)
+        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters)
 
         probs = self.compute_probs(final_caps)
 

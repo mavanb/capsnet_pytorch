@@ -53,11 +53,13 @@ def one_hot(labels, depth):
         else:
             return torch.sparse.torch.eye(depth).index_select(dim=0, index=labels)
 
+# c_vec_temp = variable(torch.FloatTensor(128, 10, 1152).fill_(8.6806 / 10000))
 
-def dynamic_routing(u_hat, iters=3):
-    """ Implementation of routing algorithm described in Dynamic Routing Hinton 2017.
 
-    :param u_hat: Variable containing the of the next layer capsules given each previous layer capsule. shape:
+def dynamic_routing(u_hat, iters):
+    """
+    Implementation of routing algorithm described in Dynamic Routing Hinton 2017.
+    :param input: u_hat, Variable containing the of the next layer capsules given each previous layer capsule. shape:
     [batch_size, num_caps_next_layer, num_caps_prev_layer, dim_next_layer]
     :param iters: number of iterations in routing algo.
     :return: next layer predictions sized by probability/correspondence. shape: [batch_size, num_caps_next_layer,
@@ -65,6 +67,7 @@ def dynamic_routing(u_hat, iters=3):
     """
     b, j, i, n = u_hat.shape
     b_vec = variable(torch.zeros(b, j, i))
+
     for index in range(iters):
         # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
         c_vec = torch.nn.Softmax(dim=2)(b_vec)
@@ -74,12 +77,14 @@ def dynamic_routing(u_hat, iters=3):
         s_vec = torch.matmul(c_vec.view(b, j, 1, i), u_hat).squeeze()
         v_vec = squash(s_vec)
 
-        if index < (iters - 1): # skip update last iter
+        if index < (iters - 1):  # skip update last iter
             # in einsum: "bjin, bjn-> bij", inner product over n
             # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
             # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
             b_vec = b_vec + torch.matmul(u_hat.view(b, j, i, 1, n), v_vec.view(b, j, 1, n, 1)).squeeze()
+
     return v_vec
+
 
 
 

@@ -1,8 +1,7 @@
 from __future__ import print_function
 
 # pytorch imports
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
+from data_loader import get_dataset
 
 # ignite import
 from ignite.engine import Events
@@ -13,12 +12,14 @@ from ignite.handlers.logging import log_simple_moving_average
 from ignite_features.handlers import *
 
 # model imports
-from nets import BasicCapsNet
+from nets import BasicCapsNet, ToyCapsNet
 from utils import variable
 from loss import CapsuleLoss
 from configurations.config_utils import get_conf_logger
 
 from ignite_features.runners import default_run
+
+import time
 
 
 def custom_args(parser):
@@ -28,16 +29,21 @@ def custom_args(parser):
     parser.add_argument('--alpha', type=float, required=True, help="Alpha of CapsuleLoss")
     parser.add_argument('--m_plus', type=float, required=True, help="m_plus of margin loss")
     parser.add_argument('--m_min', type=float, required=True, help="m_min of margin loss")
+    parser.add_argument('--prim_caps', type=int, required=True, help="Number of primary capsules")
+    parser.add_argument('--routing_iters', type=int, required=True, help="Number of iterations in the routing algo.")
+    parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
     return parser
 
 
 def main():
     conf, logger = get_conf_logger(custom_args=custom_args)
 
-    dataset = MNIST(download=False, root="./mnist", transform=ToTensor(), train=True)
+    dataset, data_shape = get_dataset(conf.dataset)
 
-    model = BasicCapsNet(in_channels=1, digit_caps=10, vec_len_prim=8, vec_len_digit=16, routing_iters=3, prim_caps=32,
-                         in_height=28, in_width=28)
+    model = BasicCapsNet(in_channels=data_shape[0], digit_caps=10, vec_len_prim=8, vec_len_digit=16,
+                         routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
+                         in_width=data_shape[2])
+
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=10)
 
     optimizer = torch.optim.Adam(model.parameters())
@@ -55,7 +61,7 @@ def main():
 
         loss.backward()
         optimizer.step()
-        return loss.data[0], margin_loss.data[0], recon_loss.data[0]
+        return loss.data[0], margin_loss.data[0], recon_loss.data[0], (time.time(), data.shape[0])
 
     def validate_function(batch):
         model.eval()
@@ -71,6 +77,7 @@ def main():
         return loss.data[0], acc, model.epoch
 
     def add_events(trainer, evaluator, train_loader, val_loader, vis):
+
         # trainer event handlers
         trainer.add_event_handler(Events.ITERATION_COMPLETED,
                                   log_simple_moving_average,
@@ -82,6 +89,8 @@ def main():
         trainer.add_event_handler(Events.ITERATION_COMPLETED, get_plot_training_loss_handler(vis,
                                                                                              plot_every=conf.log_interval,
                                                                                              transform=lambda x: x[0]))
+        if conf.print_time:
+            trainer.add_event_handler(Events.EPOCH_COMPLETED, time_logger_handler(logger, transform=lambda x: x[3]))
         trainer.add_event_handler(Events.EPOCH_COMPLETED, epoch_update, model)
         trainer.add_event_handler(Events.EPOCH_COMPLETED,
                                   Evaluate(evaluator, val_loader, epoch_interval=1, clear_history=False))
@@ -89,9 +98,9 @@ def main():
         # evaluator event handlers
         evaluator.add_event_handler(Events.COMPLETED, get_log_validation_loss_and_accuracy_handler(logger), model)
         evaluator.add_event_handler(Events.COMPLETED, get_plot_validation_accuracy_handler(vis), trainer, model)
-        evaluator.add_event_handler(Events.COMPLETED, early_stop_and_save_handler(conf), model)
+        evaluator.add_event_handler(Events.COMPLETED, early_stop_and_save_handler(conf, logger), model)
 
-    default_run(conf, dataset, model, train_function, validate_function, add_events)
+    default_run(logger, conf, dataset, model, train_function, validate_function, add_events)
 
 
 if __name__ == "__main__":

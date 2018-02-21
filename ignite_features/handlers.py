@@ -53,7 +53,7 @@ def epoch_update(engine, model):
     model.epoch = engine.current_epoch
 
 
-def early_stop_and_save_handler(conf):
+def early_stop_and_save_handler(conf, logger, terminate=False):
     def save(model):
         if conf.save_trained:
             if not os.path.exists(conf.trained_model_path):
@@ -66,7 +66,23 @@ def early_stop_and_save_handler(conf):
         cur_loss = np.mean([loss for (loss, accuracy, epoch) in engine.history if epoch is model.epoch])
         if cur_loss < prev_loss:
             save(model)
+            logger("Loss improved saving model")
         save(model)
+        if terminate:
+            engine.terminate()
 
     return early_stop_and_save
 
+
+def time_logger_handler(logger, transform):
+    def time_printer(engine):
+        times_size = list(map(transform, engine.history))
+        times_diff = []
+        for t in range(1, len(times_size)):
+            diff = (times_size[t][0] - times_size[t - 1][0]) / times_size[t][1]
+            times_diff.append(diff)
+        avg_time = np.mean(times_diff) if times_diff else np.nan
+        total_time = np.sum(times_diff) if times_diff else np.nan
+        logger("Average time per iteration (in sec): {}, Total epcoch time: {}".format(avg_time, total_time))
+
+    return time_printer
