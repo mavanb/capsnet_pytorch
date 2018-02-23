@@ -5,16 +5,16 @@ multiple data sets.
 """
 import numpy as np
 import torch
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 from torchvision.datasets import MNIST, CIFAR10
 import torch.utils.data as data
 from torchvision.transforms import ToTensor
-from utils import one_hot
+from utils import one_hot, variable
 
 
-def get_train_valid_data(data_set, batch_size, random_seed=None, valid_size=0.1, shuffle=True, num_workers=4,
-                         pin_memory=False, train_max=None, valid_max=None, drop_last=False):
+def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffle=True, num_workers=4,
+                         pin_memory=False, train_max=None, valid_max=None, drop_last=False, ):
     """
     Utility function for loading and returning train, valid and test data.
     If using CUDA, num_workers should be set to 1 and pin_memory to True.
@@ -23,7 +23,7 @@ def get_train_valid_data(data_set, batch_size, random_seed=None, valid_size=0.1,
     ------
     - data_set: instance of torch Dataset class
     - batch_size: how many samples per batch to load.
-    - random_seed: fix seed for reproducibility.
+    - seed: fix seed for reproducibility.
     - valid_size: percentage split of the training set used for
       the validation set. Should be a float in the range [0, 1].
     - shuffle: whether to shuffle the train/validation indices.
@@ -40,13 +40,13 @@ def get_train_valid_data(data_set, batch_size, random_seed=None, valid_size=0.1,
 
     num_train = len(data_set)
     indices = list(range(num_train))
-    split = int(np.floor(valid_size * num_train))
+    split = int(np.floor((1-valid_size) * num_train))
 
-    if shuffle:
-        np.random.seed(random_seed)
-        np.random.shuffle(indices)
+    # if shuffle:
+    #     np.random.seed(seed)
+    #     np.random.shuffle(indices)
 
-    train_idx, valid_idx = indices[split:], indices[:split]
+    train_idx, valid_idx = indices[:split], indices[split:]
 
     # limit number of train / valid samples
     if train_max:
@@ -56,8 +56,13 @@ def get_train_valid_data(data_set, batch_size, random_seed=None, valid_size=0.1,
         assert (valid_max * batch_size < len(valid_idx)), "valid_max should be lower than number of samples in valid set"
         valid_idx = valid_idx[:valid_max * batch_size]
 
-    train_sampler = SubsetRandomSampler(train_idx)
-    valid_sampler = SubsetRandomSampler(valid_idx)
+    if shuffle:
+        train_sampler = SubsetRandomSampler(train_idx)
+        valid_sampler = SubsetRandomSampler(valid_idx)
+
+    else:
+        train_sampler = SequentialSampler(train_idx)
+        valid_sampler = SequentialSampler(valid_idx)
 
     train_loader = torch.utils.data.DataLoader(data_set,
                                                batch_size=batch_size, sampler=train_sampler,
@@ -69,13 +74,11 @@ def get_train_valid_data(data_set, batch_size, random_seed=None, valid_size=0.1,
     return train_loader, valid_loader
 
 
-def get_dataset(dataset_name):
+def get_dataset(dataset_name, transform=ToTensor()):
     if dataset_name == "mnist":
-        dataset = MNIST(download=True, root="./mnist", transform=ToTensor(), train=True)
+        dataset = MNIST(download=True, root="./mnist", transform=transform, train=True)
     elif dataset_name == "cifar10":
-        dataset = CIFAR10(download=True, root="./cifar10", transform=ToTensor(), train=True)
-    elif dataset_name == "2dgauss":
-        dataset = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 20000))
+        dataset = CIFAR10(download=True, root="./cifar10", transform=transform, train=True)
     else:
         raise ValueError("Name dataset does not exists.")
     return dataset, dataset[0][0].shape

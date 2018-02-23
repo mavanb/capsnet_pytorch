@@ -29,7 +29,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
     kwargs = {**kwargs, 'train_max': 4, 'valid_max': 2} if conf.debug == True else kwargs
     kwargs = {**kwargs, "seed": conf.seed} if conf.seed else kwargs
     train_loader, val_loader = get_train_valid_data(dataset, batch_size=conf.batch_size, drop_last=conf.drop_last,
-                                                    **kwargs)
+                                                        shuffle=conf.shuffle, **kwargs)
 
     if torch.cuda.is_available():
         model.cuda()

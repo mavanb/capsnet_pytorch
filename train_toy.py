@@ -37,7 +37,8 @@ def logged_dynamic_routing(u_hat, iters):
     :return: next layer predictions sized by probability/correspondence. shape: [batch_size, num_caps_next_layer,
     dim_next_layer]
     """
-    routing_point = RoutingPoint()
+    routing_point = RoutingPoint(u_hat.data.cpu().numpy() if torch.cuda.is_available() else u_hat.data.numpy())
+
 
     b, j, i, n = u_hat.shape
     b_vec = variable(torch.zeros(b, j, i))
@@ -59,14 +60,21 @@ def logged_dynamic_routing(u_hat, iters):
             # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
             b_vec = b_vec + torch.matmul(u_hat.view(b, j, i, 1, n), v_vec.view(b, j, 1, n, 1)).squeeze()
 
-        routing_iter = RoutingIter(index, c_vec.data.numpy(), s_vec.data.numpy(), v_vec.data.numpy())
+        if torch.cuda.is_available():
+            routing_iter = RoutingIter(index, c_vec.data.cpu().numpy(), s_vec.data.cpu().numpy(),
+                                       v_vec.data.cpu().numpy())
+        else:
+            routing_iter = RoutingIter(index, c_vec.data.numpy(), s_vec.data.numpy(),
+                                       v_vec.data.numpy())
         routing_point.routing_iters.append(routing_iter)
 
     return v_vec, routing_point
 
 
 class RoutingPoint:
-    def __init__(self):
+    def __init__(self, u_jin):
+        self.u_jin = u_jin
+
         self.acc = None
         self.epoch = None
         self.iter = None
@@ -76,11 +84,11 @@ class RoutingPoint:
 
 
 class RoutingIter:
-    def __init__(self, routing_iter, c_ij, s_j, v_j):
+    def __init__(self, routing_iter, c_ji, s_jn, v_jn):
         self.routing_iter = routing_iter
-        self.c_ij = c_ij
-        self.s_j = s_j
-        self.v_j = v_j
+        self.c_ji = c_ji
+        self.s_jn = s_jn
+        self.v_jn = v_jn
 
 
 def main():
@@ -89,11 +97,15 @@ def main():
     train_data = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 2000), train=True)
     val_data = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 2000), train=False)
 
-    train_loader = DataLoader(train_data, batch_size=128, drop_last=True)
-    val_loader = DataLoader(val_data, batch_size=128, drop_last=True)
+    kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
+    train_loader = DataLoader(train_data, batch_size=128, drop_last=True, **kwargs)
+    val_loader = DataLoader(val_data, batch_size=128, drop_last=True, **kwargs)
 
     model = ToyCapsNet(in_features=5, final_caps=2, vec_len_prim=2, routing_iters=conf.routing_iters,
                        prim_caps=20, vec_len_final=2)
+
+    if torch.cuda.is_available():
+        model.cuda()
 
     model.dynamic_routing = logged_dynamic_routing
 

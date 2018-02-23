@@ -47,7 +47,7 @@ class _CapsNet(_Net):
 
     def create_decoder_input(self, final_caps, labels=None):
         """ Construct decoder input based on class probs and final capsules.
-        Flattens capsules to [batch_size, num_final_caps * dim_final_caps] and sets all values which do not come from
+        Flattens cap*sules to [batch_size, num_final_caps * dim_final_caps] and sets all values which do not come from
         the correct class/capsule to zero (masks). During training the labels are used to masks, during inference the
         max of the class probabilities.
         :param labels: [batch_size, 1], if None: use predictions
@@ -121,6 +121,7 @@ class BasicCapsNet(_CapsNet):
 
         # initial convolution
         conv_channels = prim_caps * vec_len_prim
+        torch.manual_seed(42)
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
                                bias=True)
         self.relu = nn.ReLU()
@@ -145,9 +146,10 @@ class BasicCapsNet(_CapsNet):
         # compute grid of capsules
         primary_caps = self.primary_caps_layer(conv1)
 
-        # flatten to insert into dense layer
-        b, c, w, h, m = primary_caps.shape
-        primary_caps_flat = primary_caps.view(b, c*w*h, m)
+        # flatten to insert into dense layer, todo: disabled, to have squash over wrong dim
+        # b, c, w, h, m = primary_caps.shape
+        # primary_caps_flat = primary_caps.view(b, c*w*h, m)
+        primary_caps_flat = primary_caps
 
         # for each capsule in primary layer compute prediction for all next layer capsules
         all_final_caps = self.dense_caps_layer(primary_caps_flat)

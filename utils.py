@@ -3,6 +3,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import math
 
+
 def variable(tensor, volatile=False):
     if torch.cuda.is_available():
         return Variable(tensor, volatile=volatile).cuda()
@@ -49,7 +50,7 @@ def one_hot(labels, depth):
         return variable(torch.sparse.torch.eye(depth)).index_select(dim=0, index=labels)
     else:
         if torch.cuda.is_available():
-            return torch.sparse.torch.eye(depth).cuda().index_select(dim=0, index=labels)
+            return torch.sparse.torch.eye(depth).cuda().index_select(dim=0, index=labels.cuda())
         else:
             return torch.sparse.torch.eye(depth).index_select(dim=0, index=labels)
 
@@ -70,7 +71,7 @@ def dynamic_routing(u_hat, iters):
 
     for index in range(iters):
         # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
-        c_vec = torch.nn.Softmax(dim=2)(b_vec)
+        c_vec = torch.nn.Softmax(dim=1)(b_vec)
 
         # in einsum: bij, bjin-> bjn
         # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
@@ -81,7 +82,7 @@ def dynamic_routing(u_hat, iters):
             # in einsum: "bjin, bjn-> bij", inner product over n
             # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
             # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
-            b_vec = b_vec + torch.matmul(u_hat.view(b, j, i, 1, n), v_vec.view(b, j, 1, n, 1)).squeeze()
+            b_vec = b_vec + torch.matmul(u_hat.contiguous().view(b, j, i, 1, n), v_vec.contiguous().view(b, j, 1, n, 1)).squeeze().mean(dim=0, keepdim=True)
 
     return v_vec
 

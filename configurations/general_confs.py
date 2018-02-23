@@ -19,6 +19,7 @@ p.add_argument('--batch_size', type=int, required=True, help='Batch size.')
 p.add_argument('--epochs', type=int, required=True, help='Number of epochs')
 
 
+
 # optional arguments
 p.add_argument('--seed', type=int, default=None, help="Torch and numpy random seed. To ensure repeatability.")
 p.add_argument('--save_trained', type=bool, default=False, help='Save fully trained model for inference.')
@@ -29,6 +30,6 @@ p.add_argument('--log_interval', type=int, default=10,
                     help='how many batches to wait before logging training status')
 p.add_argument("--log_file", type=str, default=None, help="log file to log output to")
 p.add_argument("--drop_last", type=bool, default=False, help="drop last incomplete batch")
-
+p.add_argument('--shuffle', type=bool, default=False, help='Shuffle dataset')
 
 

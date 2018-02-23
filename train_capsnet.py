@@ -18,6 +18,7 @@ from loss import CapsuleLoss
 from configurations.config_utils import get_conf_logger
 
 from ignite_features.runners import default_run
+from torchvision import transforms
 
 import time
 
@@ -38,7 +39,11 @@ def custom_args(parser):
 def main():
     conf, logger = get_conf_logger(custom_args=custom_args)
 
-    dataset, data_shape = get_dataset(conf.dataset)
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    dataset, data_shape = get_dataset(conf.dataset, transform=transform)
 
     model = BasicCapsNet(in_channels=data_shape[0], digit_caps=10, vec_len_prim=8, vec_len_digit=16,
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
