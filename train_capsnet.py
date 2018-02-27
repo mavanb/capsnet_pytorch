@@ -35,6 +35,7 @@ def custom_args(parser):
     parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
     parser.add_argument('--squash_dim', type=int, required=True, help="")
     parser.add_argument('--softmax_dim', type=int, required=True, help="")
+    parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
     return parser
 
 
