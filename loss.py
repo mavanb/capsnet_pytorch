@@ -14,6 +14,7 @@ class CapsuleLoss(_Loss):
         self.num_classes = num_classes
         self.alpha = alpha
 
+        ## todo check why differnt from tf here
         self.reconstruction_loss = nn.MSELoss(size_average=size_average)
 
     def forward(self, images, labels, class_probs, reconstructions):

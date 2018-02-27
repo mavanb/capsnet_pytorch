@@ -43,7 +43,7 @@ class _CapsNet(_Net):
         :param caps: capsules of shape [batch_size, num_capsules, dim_capsules]
         :returns probs of shape [batch_size, num_capsules]
         """
-        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False))
+        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False) + 1e-7)
 
     def create_decoder_input(self, final_caps, labels=None):
         """ Construct decoder input based on class probs and final capsules.
@@ -59,6 +59,8 @@ class _CapsNet(_Net):
         masked_caps = final_caps * masks[:, :, None]
         decoder_input = masked_caps.view(final_caps.shape[0], -1)
         return decoder_input
+
+
 
 
 class ToyCapsNet(_CapsNet):
@@ -114,7 +116,7 @@ class BasicCapsNet(_CapsNet):
     """
 
     def __init__(self, in_channels, digit_caps, vec_len_prim, vec_len_digit, routing_iters, prim_caps, in_height,
-                 in_width):
+                 in_width, softmax_dim, squash_dim):
         super().__init__(digit_caps)
 
         self.routing_iters = routing_iters
@@ -124,10 +126,14 @@ class BasicCapsNet(_CapsNet):
         torch.manual_seed(42)
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
                                bias=True)
+        ## todo remove this
+        self.conv1.weight.data.fill_(0.01)
+        self.conv1.bias.data.fill_(0)
+
         self.relu = nn.ReLU()
 
         # compute primary capsules
-        self.primary_caps_layer = Conv2dPrimaryLayer(in_channels=conv_channels, out_channels=prim_caps, vec_len=vec_len_prim)
+        self.primary_caps_layer = Conv2dPrimaryLayer(in_channels=conv_channels, out_channels=prim_caps, vec_len=vec_len_prim,squash_dim=squash_dim )
 
         # grid of multiple primary caps channels is flattend, number of new channels: grid * point * channels in grid
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
@@ -139,6 +145,8 @@ class BasicCapsNet(_CapsNet):
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
+        self.softmax_dim = softmax_dim
+
     def forward(self, x, t=None):
         # apply conv layer
         conv1 = self.relu(self.conv1(x))
@@ -146,7 +154,7 @@ class BasicCapsNet(_CapsNet):
         # compute grid of capsules
         primary_caps = self.primary_caps_layer(conv1)
 
-        # flatten to insert into dense layer, todo: disabled, to have squash over wrong dim
+        # todo: get this again out the primary caps layer
         # b, c, w, h, m = primary_caps.shape
         # primary_caps_flat = primary_caps.view(b, c*w*h, m)
         primary_caps_flat = primary_caps
@@ -155,7 +163,7 @@ class BasicCapsNet(_CapsNet):
         all_final_caps = self.dense_caps_layer(primary_caps_flat)
 
         # compute digit capsules
-        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters)
+        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, softmax_dim=self.softmax_dim)
 
         probs = self.compute_probs(final_caps)
 
@@ -218,6 +226,12 @@ class CapsNetDecoder(nn.Module):
             nn.Linear(1024, in_channels * in_height * in_width),
             nn.Sigmoid()
         )
+
+        ## todo: remove this
+        for i in self.flat_reconstruction:
+            if type(i) == torch.nn.modules.linear.Linear:
+                i.weight.data.fill_(0.01)
+                i.bias.data.fill_(0.01)
 
     def forward(self, x):
         x = self.flat_reconstruction(x).view(-1, self.in_channels, self.in_height, self.in_width)

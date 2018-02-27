@@ -37,7 +37,7 @@ def squash(tensor, dim=-1):
     #todo check if safe norm is required here: not present in pytorch githubs
     squared_norm = (tensor ** 2).sum(dim=dim, keepdim=True)
     scale = squared_norm / (1. + squared_norm)
-    return scale * tensor / torch.sqrt(squared_norm)
+    return scale * tensor / torch.sqrt(squared_norm + 1e-7)
 
 
 def one_hot(labels, depth):
@@ -57,7 +57,7 @@ def one_hot(labels, depth):
 # c_vec_temp = variable(torch.FloatTensor(128, 10, 1152).fill_(8.6806 / 10000))
 
 
-def dynamic_routing(u_hat, iters):
+def dynamic_routing(u_hat, iters, softmax_dim=1):
     """
     Implementation of routing algorithm described in Dynamic Routing Hinton 2017.
     :param input: u_hat, Variable containing the of the next layer capsules given each previous layer capsule. shape:
@@ -71,7 +71,7 @@ def dynamic_routing(u_hat, iters):
 
     for index in range(iters):
         # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
-        c_vec = torch.nn.Softmax(dim=1)(b_vec)
+        c_vec = torch.nn.Softmax(dim=softmax_dim)(b_vec) ## dim is supposed to be 1, but 2 seems to work way better
 
         # in einsum: bij, bjin-> bjn
         # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
