@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer
-from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing
+from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing, init_weights
 import torch.nn.functional as F
 from torch.nn.modules.module import _addindent
 import numpy as np
@@ -135,9 +135,9 @@ class BasicCapsNet(_CapsNet):
 
         # initial convolution
         conv_channels = prim_caps * vec_len_prim
-        torch.manual_seed(42)
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
+        conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
                                bias=True)
+        self.conv1 = init_weights(conv1)
         self.relu = nn.ReLU()
 
         # compute primary capsules
@@ -225,11 +225,11 @@ class CapsNetDecoder(nn.Module):
         self.in_width = in_width
 
         self.flat_reconstruction = nn.Sequential(
-            nn.Linear(vec_len_digit * digit_caps, 512),
+            init_weights(nn.Linear(vec_len_digit * digit_caps, 512)),
             nn.ReLU(inplace=True),
-            nn.Linear(512, 1024),
+            init_weights(nn.Linear(512, 1024)),
             nn.ReLU(inplace=True),
-            nn.Linear(1024, in_channels * in_height * in_width),
+            init_weights(nn.Linear(1024, in_channels * in_height * in_width)),
             nn.Sigmoid()
         )
 

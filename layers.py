@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import variable, squash, parameter
+from utils import variable, squash, parameter, init_weights
 
 
 class LinearPrimaryLayer(nn.Module):
@@ -24,8 +24,9 @@ class Conv2dPrimaryLayer(nn.Module):
         self.out_channels = out_channels
         self.vector_length = vec_len
 
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels * vec_len, kernel_size=9, stride=2,
+        conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels * vec_len, kernel_size=9, stride=2,
                               bias=True)
+        self.conv = init_weights(conv)
 
         self.squash_dim = squash_dim
 

@@ -87,5 +87,8 @@ def dynamic_routing(u_hat, iters, softmax_dim=1):
     return v_vec
 
 
-
+def init_weights(module, weight_mean=0, weight_stddev=0.1, bias_mean=0.1):
+    module.weight.data.normal_(weight_mean, weight_stddev)
+    module.bias.data.fill_(bias_mean)
+    return module
 
