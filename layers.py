@@ -58,9 +58,6 @@ class DenseCapsuleLayer(nn.Module):
         self.W = parameter(torch.randn(1, in_capsules, out_capsules, vec_len_out, vec_len_in))
         # todo change back: changed for check (permutation)
 
-        ## todo remove this
-        self.W.data.fill_(0.01)
-
     def forward(self, input):
         batch_size = input.shape[0]
         input_ = input.view(batch_size, 1, self.in_capsules, self.vector_len_in, 1)
