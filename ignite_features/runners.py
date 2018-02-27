@@ -24,6 +24,8 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
     num_parameters = np.sum([np.prod(list(p.shape)) for p in model.parameters()])
     logger("Number of parameters model: {}".format(num_parameters))
 
+    print(str(model))
+
     # init data sets
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
     kwargs = {**kwargs, 'train_max': 4, 'valid_max': 2} if conf.debug == True else kwargs

@@ -4,6 +4,8 @@ from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer
 from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing
 import torch.nn.functional as F
+from torch.nn.modules.module import _addindent
+import numpy as np
 
 
 class _Net(nn.Module):
@@ -28,6 +30,19 @@ class _Net(nn.Module):
         :return: batch accurarcy (float)
         """
         return sum(self.compute_predictions(probs).data == label.data) / probs.size(0)
+
+    @staticmethod
+    def _num_parameters(module):
+        return int(np.sum([np.prod(list(p.shape)) for p in module.parameters()]))
+
+    def __repr__(self):
+        tmpstr = self.__class__.__name__ + '(\n'
+        for key, module in self._modules.items():
+            modstr = module.__repr__()
+            modstr = _addindent(modstr, 2)
+            tmpstr = tmpstr + '  ({}, {}): '.format(key, self._num_parameters(module)) + modstr + '\n'
+        tmpstr = tmpstr + ')'
+        return tmpstr
 
 
 class _CapsNet(_Net):

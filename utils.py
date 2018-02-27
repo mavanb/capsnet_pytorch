@@ -12,7 +12,7 @@ def variable(tensor, volatile=False):
 
 def parameter(tensor):
     if torch.cuda.is_available():
-        return nn.Parameter(tensor).cuda()
+        return nn.Parameter(tensor.cuda())
     return nn.Parameter(tensor)
 
 
