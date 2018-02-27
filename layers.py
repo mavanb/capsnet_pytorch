@@ -45,7 +45,7 @@ class Conv2dPrimaryLayer(nn.Module):
 
 class DenseCapsuleLayer(nn.Module):
 
-    def __init__(self, in_capsules, out_capsules, vec_len_in, vec_len_out, routing_iters):
+    def __init__(self, in_capsules, out_capsules, vec_len_in, vec_len_out, routing_iters, stdev):
         super(DenseCapsuleLayer, self).__init__()
 
         self.in_capsules = in_capsules
@@ -55,7 +55,7 @@ class DenseCapsuleLayer(nn.Module):
         self.routing_iters = routing_iters
 
         # self.W = parameter(torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
-        self.W = parameter(0.1 * torch.randn(1, in_capsules, out_capsules, vec_len_out, vec_len_in))
+        self.W = parameter(stdev * torch.randn(1, in_capsules, out_capsules, vec_len_out, vec_len_in))
         # todo change back: changed for check (permutation)
 
     def forward(self, input):

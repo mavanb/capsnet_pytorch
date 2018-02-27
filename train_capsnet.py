@@ -49,7 +49,8 @@ def main():
 
     model = BasicCapsNet(in_channels=data_shape[0], digit_caps=10, vec_len_prim=8, vec_len_digit=16,
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
-                         in_width=data_shape[2], softmax_dim=conf.softmax_dim, squash_dim=conf.squash_dim)
+                         in_width=data_shape[2], softmax_dim=conf.softmax_dim, squash_dim=conf.squash_dim
+                        , stdev_W=conf.stdev_W)
 
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=10)
 

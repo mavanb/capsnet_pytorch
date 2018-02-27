@@ -128,7 +128,7 @@ class BasicCapsNet(_CapsNet):
     """
 
     def __init__(self, in_channels, digit_caps, vec_len_prim, vec_len_digit, routing_iters, prim_caps, in_height,
-                 in_width, softmax_dim, squash_dim):
+                 in_width, softmax_dim, squash_dim, stdev_W):
         super().__init__(digit_caps)
 
         self.routing_iters = routing_iters
@@ -147,7 +147,7 @@ class BasicCapsNet(_CapsNet):
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
         self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
-                                                  vec_len_digit, routing_iters)
+                                                  vec_len_digit, routing_iters, stdev_W)
 
         self.dynamic_routing = dynamic_routing
 
