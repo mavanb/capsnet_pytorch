@@ -42,10 +42,7 @@ def custom_args(parser):
 def main():
     conf, logger = get_conf_logger(custom_args=custom_args)
 
-    transform = transforms.Compose([
-        transforms.ToTensor()
-        # , transforms.Normalize((0.1307,), (0.3081,))
-    ])
+    transform = transforms.ToTensor()
     dataset, data_shape = get_dataset(conf.dataset, transform=transform)
 
     model = BasicCapsNet(in_channels=data_shape[0], digit_caps=10, vec_len_prim=8, vec_len_digit=16,

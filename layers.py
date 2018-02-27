@@ -54,16 +54,12 @@ class DenseCapsuleLayer(nn.Module):
         self.vector_len_out = vec_len_out
         self.routing_iters = routing_iters
 
-        # self.W = parameter(torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
-        self.W = parameter(stdev * torch.randn(1, in_capsules, out_capsules, vec_len_out, vec_len_in))
-        # todo change back: changed for check (permutation)
+        self.W = parameter(stdev * torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
 
     def forward(self, input):
         batch_size = input.shape[0]
         input_ = input.view(batch_size, 1, self.in_capsules, self.vector_len_in, 1)
-        input_ = input_.permute(0, 2, 1, 3, 4) #todo change back (permutation)
         u_hat = torch.matmul(self.W, input_).squeeze()
-        u_hat = u_hat.permute(0, 2, 1, 3)
         return u_hat
 
 
