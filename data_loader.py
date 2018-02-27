@@ -14,7 +14,7 @@ from utils import one_hot, variable
 
 
 def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffle=True, num_workers=4,
-                         pin_memory=False, train_max=None, valid_max=None, drop_last=False, ):
+                         pin_memory=False, train_max=None, valid_max=None, drop_last=False):
     """
     Utility function for loading and returning train, valid and test data.
     If using CUDA, num_workers should be set to 1 and pin_memory to True.
@@ -42,9 +42,9 @@ def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffl
     indices = list(range(num_train))
     split = int(np.floor((1-valid_size) * num_train))
 
-    # if shuffle:
-    #     np.random.seed(seed)
-    #     np.random.shuffle(indices)
+    if shuffle:
+        np.random.seed(seed)
+        np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[:split], indices[split:]
 
@@ -59,7 +59,6 @@ def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffl
     if shuffle:
         train_sampler = SubsetRandomSampler(train_idx)
         valid_sampler = SubsetRandomSampler(valid_idx)
-
     else:
         train_sampler = SequentialSampler(train_idx)
         valid_sampler = SequentialSampler(valid_idx)
