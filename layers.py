@@ -28,10 +28,6 @@ class Conv2dPrimaryLayer(nn.Module):
         self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels * vec_len, kernel_size=9, stride=2,
                               bias=True)
 
-        ## todo: remove this
-        self.conv.weight.data.fill_(0.01)
-        self.conv.bias.data.fill_(0)
-
         # method of https://github.com/cedrickchee/capsule-net-pytorch
         # self.conv_units = nn.ModuleList([
         #     nn.Conv2d(self.in_channels, 32, 9, 2) for u in range(vec_len)

@@ -141,10 +141,6 @@ class BasicCapsNet(_CapsNet):
         torch.manual_seed(42)
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
                                bias=True)
-        ## todo remove this
-        self.conv1.weight.data.fill_(0.01)
-        self.conv1.bias.data.fill_(0)
-
         self.relu = nn.ReLU()
 
         # compute primary capsules
@@ -241,12 +237,6 @@ class CapsNetDecoder(nn.Module):
             nn.Linear(1024, in_channels * in_height * in_width),
             nn.Sigmoid()
         )
-
-        ## todo: remove this
-        for i in self.flat_reconstruction:
-            if type(i) == torch.nn.modules.linear.Linear:
-                i.weight.data.fill_(0.01)
-                i.bias.data.fill_(0.01)
 
     def forward(self, x):
         x = self.flat_reconstruction(x).view(-1, self.in_channels, self.in_height, self.in_width)
