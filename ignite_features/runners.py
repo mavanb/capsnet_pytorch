@@ -23,8 +23,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
     # print number of parameters in model
     num_parameters = np.sum([np.prod(list(p.shape)) for p in model.parameters()])
     logger("Number of parameters model: {}".format(num_parameters))
-
-    print(str(model))
+    logger("Model architecture: \n" + str(model))
 
     # init data sets
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}

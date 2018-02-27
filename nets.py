@@ -165,10 +165,8 @@ class BasicCapsNet(_CapsNet):
         # compute grid of capsules
         primary_caps = self.primary_caps_layer(conv1)
 
-        # todo: get this again out the primary caps layer
-        # b, c, w, h, m = primary_caps.shape
-        # primary_caps_flat = primary_caps.view(b, c*w*h, m)
-        primary_caps_flat = primary_caps
+        b, c, w, h, m = primary_caps.shape
+        primary_caps_flat = primary_caps.view(b, c*w*h, m)
 
         # for each capsule in primary layer compute prediction for all next layer capsules
         all_final_caps = self.dense_caps_layer(primary_caps_flat)

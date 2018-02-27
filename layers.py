@@ -24,47 +24,20 @@ class Conv2dPrimaryLayer(nn.Module):
         self.out_channels = out_channels
         self.vector_length = vec_len
 
-        # my method / author´s method
         self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels * vec_len, kernel_size=9, stride=2,
                               bias=True)
 
-        # method of https://github.com/cedrickchee/capsule-net-pytorch
-        # self.conv_units = nn.ModuleList([
-        #     nn.Conv2d(self.in_channels, 32, 9, 2) for u in range(vec_len)
-        # ])
-
         self.squash_dim = squash_dim
-
 
     def forward(self, input):
         """
         :param input: [b, c, h, w]
         :return: [b, c, h, w, vec]
         """
-
-        # ## method of https://github.com/cedrickchee/capsule-net-pytorch
-        # x = input
-        # unit = [self.conv_units[i](x) for i, l in enumerate(self.conv_units)]
-        #
-        # # Stack all unit outputs.
-        # # Stacked of 8 unit output shape: [128, 8, 32, 6, 6]
-        # unit = torch.stack(unit, dim=1)
-        #
-        # batch_size = x.size(0)
-        #
-        # # Flatten the 32 of 6x6 grid into 1152.
-        # # Shape: [128, 8, 1152]
-        # unit = unit.view(batch_size, self.vector_length, -1)
-        #
-        # caps_raw = unit.permute(0, 2, 1)  # batch, 1152, 8
-
-        ## my method
         features = self.conv(input)     # [b, out_c*vec_len, h, w)
         _, _, h, w = features.shape
         caps_raw = features.contiguous().view(-1, self.out_channels, self.vector_length, h, w)      # [b, c, vec, h, w]
         caps_raw = caps_raw.permute(0, 1, 3, 4, 2)  # [b, c, h, w, vec]
-        b, c, w, h, m = caps_raw.shape
-        caps_raw = caps_raw.contiguous().view(b, c*w*h, m)
 
         # squash dim is supposed to be 2, but 1 seems too work way way beter
         return squash(caps_raw, dim=self.squash_dim)
