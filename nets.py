@@ -70,12 +70,9 @@ class _CapsNet(_Net):
         """
         targets = labels if type(labels) == Variable else self.compute_predictions(self.compute_probs(final_caps))
         masks = one_hot(targets, self.num_final_caps)
-        ##todo check if cuda has to be called, make one hot for variables
         masked_caps = final_caps * masks[:, :, None]
         decoder_input = masked_caps.view(final_caps.shape[0], -1)
         return decoder_input
-
-
 
 
 class ToyCapsNet(_CapsNet):
