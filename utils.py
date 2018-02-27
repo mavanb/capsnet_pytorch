@@ -82,7 +82,7 @@ def dynamic_routing(u_hat, iters, softmax_dim=1):
             # in einsum: "bjin, bjn-> bij", inner product over n
             # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
             # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
-            b_vec = b_vec + torch.matmul(u_hat.view(b, j, i, 1, n), v_vec.view(b, j, 1, n, 1)).squeeze().mean(dim=0, keepdim=True)
+            b_vec = b_vec + torch.matmul(u_hat.contiguous().view(b, j, i, 1, n), v_vec.contiguous().view(b, j, 1, n, 1)).squeeze().mean(dim=0, keepdim=True)
 
     return v_vec
 
