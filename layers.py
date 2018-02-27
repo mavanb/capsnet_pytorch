@@ -55,7 +55,7 @@ class DenseCapsuleLayer(nn.Module):
         self.routing_iters = routing_iters
 
         # self.W = parameter(torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
-        self.W = parameter(torch.randn(1, in_capsules, out_capsules, vec_len_out, vec_len_in))
+        self.W = parameter(0.1 * torch.randn(1, in_capsules, out_capsules, vec_len_out, vec_len_in))
         # todo change back: changed for check (permutation)
 
     def forward(self, input):
