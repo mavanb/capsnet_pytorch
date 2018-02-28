@@ -1,26 +1,21 @@
 from __future__ import print_function
 
-# pytorch imports
-from data_loader import get_dataset
+from torchvision import transforms
+import time
 
 # ignite import
 from ignite.engine import Events
 from ignite.handlers.evaluate import Evaluate
 from ignite.handlers.logging import log_simple_moving_average
 
-# custom ignite features
-from ignite_features.handlers import *
-
-# model imports
-from nets import BasicCapsNet, ToyCapsNet
+# own imports
+from nets import BasicCapsNet
 from utils import variable
 from loss import CapsuleLoss
 from configurations.config_utils import get_conf_logger
-
 from ignite_features.runners import default_run
-from torchvision import transforms
-
-import time
+from ignite_features.handlers import *
+from data_loader import get_dataset
 
 
 def custom_args(parser):
@@ -89,15 +84,15 @@ def main():
         # trainer event handlers
         trainer.add_event_handler(Events.ITERATION_COMPLETED,
                                   log_simple_moving_average,
-                                  window_size=1,
+                                  window_size=5,
                                   metric_name="NLL",
                                   history_transform=lambda x: x[0],
                                   should_log=lambda trainer: trainer.current_iteration % conf.log_interval == 0,
                                   logger=logger)
         trainer.add_event_handler(Events.ITERATION_COMPLETED,
                                   log_simple_moving_average,
-                                  window_size=1,
-                                  metric_name="acc",
+                                  window_size=5,
+                                  metric_name="Accuracy",
                                   history_transform=lambda x: x[4],
                                   should_log=lambda trainer: trainer.current_iteration % conf.log_interval == 0,
                                   logger=logger)
