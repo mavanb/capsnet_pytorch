@@ -25,10 +25,11 @@ def custom_args(parser):
     parser.add_argument('--m_min', type=float, required=True, help="m_min of margin loss")
     parser.add_argument('--prim_caps', type=int, required=True, help="Number of primary capsules")
     parser.add_argument('--routing_iters', type=int, required=True, help="Number of iterations in the routing algo.")
+    parser.add_argument('--bias_routing', type=bool, default=False, help="whether to use bias in routing")
     return parser
 
 
-def logged_dynamic_routing(u_hat, iters):
+def logged_dynamic_routing(u_hat, iters, bias):
     """
     Implementation of routing algorithm described in Dynamic Routing Hinton 2017.
     :param input: u_hat, Variable containing the of the next layer capsules given each previous layer capsule. shape:
@@ -45,14 +46,17 @@ def logged_dynamic_routing(u_hat, iters):
 
     for index in range(iters):
 
-
         # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
-        c_vec = torch.nn.Softmax(dim=2)(b_vec)
+        c_vec = torch.nn.Softmax(dim=1)(b_vec)
 
         # in einsum: bij, bjin-> bjn
         # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
         s_vec = torch.matmul(c_vec.view(b, j, 1, i), u_hat).squeeze()
-        v_vec = squash(s_vec)
+        if type(bias) == torch.nn.Parameter:
+            s_vec_bias = s_vec + bias
+        else:
+            s_vec_bias = s_vec
+        v_vec = squash(s_vec_bias)
 
         if index < (iters - 1):  # skip update last iter
             # in einsum: "bjin, bjn-> bij", inner product over n
@@ -94,15 +98,16 @@ class RoutingIter:
 def main():
     conf, logger = get_conf_logger(custom_args=custom_args)
 
-    train_data = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 2000), train=True)
-    val_data = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 2000), train=False)
+    new_dim = 3
+    train_data = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 2000), train=True, new_dim=new_dim)
+    val_data = Gaussian2D(transform=lambda x: torch.from_numpy(x).type(torch.FloatTensor), n_samples=(2000, 2000), train=False, new_dim=new_dim)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
     train_loader = DataLoader(train_data, batch_size=128, drop_last=True, **kwargs)
     val_loader = DataLoader(val_data, batch_size=128, drop_last=True, **kwargs)
 
-    model = ToyCapsNet(in_features=5, final_caps=2, vec_len_prim=2, routing_iters=conf.routing_iters,
-                       prim_caps=20, vec_len_final=2)
+    model = ToyCapsNet(in_features=new_dim, final_caps=2, vec_len_prim=2, routing_iters=conf.routing_iters,
+                       prim_caps=20, vec_len_final=2, bias_routing=conf.bias_routing)
 
     if torch.cuda.is_available():
         model.cuda()
@@ -123,20 +128,22 @@ def main():
         data = variable(observed_batch)
         labels = variable(label_batch)
 
-        class_probs, reconstruction, _, routing_point = model(data, labels)
+        class_logits, reconstruction, _, routing_point = model(data, labels)
 
         # add all training step info to the routing point
-        routing_point.acc = evaluate()
+        acc = evaluate()
+        routing_point.acc = acc
         routing_point.iter = iter
         routing_point.epoch = epoch
         routing_point.latent = latent_batch
         routing_point.label = label_batch
         routing_point_list.append(routing_point)
 
-        loss, margin_loss, recon_loss = capsule_loss(data, labels, class_probs, reconstruction)
+        loss, margin_loss, recon_loss = capsule_loss(data, labels, class_logits, reconstruction)
 
         loss.backward()
         optimizer.step()
+        return acc
 
     def evaluate():
         model.eval()
@@ -153,8 +160,8 @@ def main():
 
         for batch_idx, batch in enumerate(train_loader):
 
-            train(batch, epoch, batch_idx)
-        logger("Epoch: {}".format(epoch))
+            acc = train(batch, epoch, batch_idx)
+        logger("Epoch: {}, acc: {:0.2f}".format(epoch, acc))
 
     logger("Final acc: {}".format(evaluate()))
 

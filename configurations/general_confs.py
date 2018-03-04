@@ -19,7 +19,6 @@ p.add_argument('--batch_size', type=int, required=True, help='Batch size.')
 p.add_argument('--epochs', type=int, required=True, help='Number of epochs')
 
 
-
 # optional arguments
 p.add_argument('--seed', type=int, default=None, help="Torch and numpy random seed. To ensure repeatability.")
 p.add_argument('--save_trained', type=bool, default=False, help='Save fully trained model for inference.')

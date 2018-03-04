@@ -8,7 +8,6 @@ from ignite.evaluator import Evaluator
 from data_loader import get_train_valid_data
 import os
 
-
 def default_run(logger, conf, dataset, model, train_function, validate_function, add_events):
 
     # init ignite

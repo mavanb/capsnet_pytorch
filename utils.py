@@ -56,8 +56,7 @@ def one_hot(labels, depth):
 
 # c_vec_temp = variable(torch.FloatTensor(128, 10, 1152).fill_(8.6806 / 10000))
 
-
-def dynamic_routing(u_hat, iters, softmax_dim=1):
+def dynamic_routing(u_hat, iters, bias, softmax_dim=1):
     """
     Implementation of routing algorithm described in Dynamic Routing Hinton 2017.
     :param input: u_hat, Variable containing the of the next layer capsules given each previous layer capsule. shape:
@@ -76,7 +75,11 @@ def dynamic_routing(u_hat, iters, softmax_dim=1):
         # in einsum: bij, bjin-> bjn
         # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
         s_vec = torch.matmul(c_vec.view(b, j, 1, i), u_hat).squeeze()
-        v_vec = squash(s_vec)
+        if type(bias) == torch.nn.Parameter:
+            s_vec_bias = s_vec + bias
+        else:
+            s_vec_bias = s_vec
+        v_vec = squash(s_vec_bias)
 
         if index < (iters - 1):  # skip update last iter
             # in einsum: "bjin, bjn-> bij", inner product over n

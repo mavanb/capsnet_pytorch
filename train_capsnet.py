@@ -31,8 +31,8 @@ def custom_args(parser):
     parser.add_argument('--squash_dim', type=int, required=True, help="")
     parser.add_argument('--softmax_dim', type=int, required=True, help="")
     parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
+    parser.add_argument('--bias_routing', type=bool, default=False, help="whether to use bias in routing")
     return parser
-
 
 def main():
     conf, logger = get_conf_logger(custom_args=custom_args)
@@ -43,7 +43,7 @@ def main():
     model = BasicCapsNet(in_channels=data_shape[0], digit_caps=10, vec_len_prim=8, vec_len_digit=16,
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
                          in_width=data_shape[2], softmax_dim=conf.softmax_dim, squash_dim=conf.squash_dim,
-                         stdev_W=conf.stdev_W)
+                         stdev_W=conf.stdev_W, bias_routing=conf.bias_routing)
 
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=10)
 

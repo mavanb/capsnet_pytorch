@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer
-from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing, init_weights
+from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing, init_weights, parameter
 import torch.nn.functional as F
 from torch.nn.modules.module import _addindent
 import numpy as np
@@ -15,21 +15,21 @@ class _Net(nn.Module):
         self.epoch = 0
 
     @staticmethod
-    def compute_predictions(probs):
+    def compute_predictions(logits):
         """Compute predictions by selecting
-        :param probs: [batch_size, num_classes/capsules]
+        :param logits: [batch_size, num_classes/capsules]
         :returns [batch_size]
         """
-        _, index_max = probs.max(dim=1, keepdim=False)
+        _, index_max = logits.max(dim=1, keepdim=False)
         return index_max.squeeze()
 
-    def compute_acc(self, probs, label):
+    def compute_acc(self, logits, label):
         """ Compute accuracy of batch
-        :param probs: [batch_size, classes]
+        :param logits: [batch_size, classes]
         :param label: [batch_size]
         :return: batch accurarcy (float)
         """
-        return sum(self.compute_predictions(probs).data == label.data) / probs.size(0)
+        return sum(self.compute_predictions(logits).data == label.data) / logits.size(0)
 
     @staticmethod
     def _num_parameters(module):
@@ -53,10 +53,10 @@ class _CapsNet(_Net):
         self.num_final_caps = num_final_caps
 
     @staticmethod
-    def compute_probs(caps):
-        """ Compute class probabilities from the capsule/vector length.
+    def compute_logits(caps):
+        """ Compute class logits from the capsule/vector length.
         :param caps: capsules of shape [batch_size, num_capsules, dim_capsules]
-        :returns probs of shape [batch_size, num_capsules]
+        :returns logits of shape [batch_size, num_capsules]
         """
         return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False) + 1e-7)
 
@@ -68,7 +68,7 @@ class _CapsNet(_Net):
         :param labels: [batch_size, 1], if None: use predictions
         :return: [batch_size, num_final_caps * dim_final_caps]
         """
-        targets = labels if type(labels) == Variable else self.compute_predictions(self.compute_probs(final_caps))
+        targets = labels if type(labels) == Variable else self.compute_predictions(self.compute_logits(final_caps))
         masks = one_hot(targets, self.num_final_caps)
         masked_caps = final_caps * masks[:, :, None]
         decoder_input = masked_caps.view(final_caps.shape[0], -1)
@@ -77,14 +77,20 @@ class _CapsNet(_Net):
 
 class ToyCapsNet(_CapsNet):
 
-    def __init__(self, in_features, final_caps, vec_len_prim, vec_len_final, routing_iters, prim_caps):
+    def __init__(self, in_features, final_caps, vec_len_prim, vec_len_final, routing_iters, prim_caps, bias_routing):
         super().__init__(final_caps)
         self.routing_iters = routing_iters
         self.primary_caps_layer = LinearPrimaryLayer(in_features, prim_caps, vec_len_prim)
         self.dense_caps_layer = DenseCapsuleLayer(prim_caps, final_caps, vec_len_prim,
-                                                  vec_len_final, routing_iters)
+                                                  vec_len_final, routing_iters, stdev=0.1)
 
         self.dynamic_routing = None
+        if bias_routing:
+            b_routing = parameter(torch.zeros(final_caps, vec_len_final))
+            b_routing.data.fill_(0.1)
+            self.b_routing = b_routing
+        else:
+            self.b_routing = None
 
         self.decoder = nn.Sequential(
             nn.Linear(vec_len_final * final_caps, 52),
@@ -101,12 +107,12 @@ class ToyCapsNet(_CapsNet):
         all_final_caps = self.dense_caps_layer(primary_caps)
 
         # compute digit capsules
-        final_caps, routing_point = self.dynamic_routing(all_final_caps, self.routing_iters)
-        probs = self.compute_probs(final_caps)
+        final_caps, routing_point = self.dynamic_routing(all_final_caps, self.routing_iters, self.b_routing)
+        logits = self.compute_logits(final_caps)
         decoder_input = self.create_decoder_input(final_caps, t)
         recon = self.decoder(decoder_input)
 
-        return probs, recon, final_caps, routing_point
+        return logits, recon, final_caps, routing_point
 
 
 class BasicCapsNet(_CapsNet):
@@ -128,7 +134,7 @@ class BasicCapsNet(_CapsNet):
     """
 
     def __init__(self, in_channels, digit_caps, vec_len_prim, vec_len_digit, routing_iters, prim_caps, in_height,
-                 in_width, softmax_dim, squash_dim, stdev_W):
+                 in_width, softmax_dim, squash_dim, stdev_W, bias_routing):
         super().__init__(digit_caps)
 
         self.routing_iters = routing_iters
@@ -150,6 +156,12 @@ class BasicCapsNet(_CapsNet):
                                                   vec_len_digit, routing_iters, stdev_W)
 
         self.dynamic_routing = dynamic_routing
+        if bias_routing:
+            b_routing = parameter(torch.zeros(digit_caps, vec_len_digit))
+            b_routing.data.fill_(0.1)
+            self.b_routing = b_routing
+        else:
+            self.b_routing = None
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
@@ -169,14 +181,14 @@ class BasicCapsNet(_CapsNet):
         all_final_caps = self.dense_caps_layer(primary_caps_flat)
 
         # compute digit capsules
-        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, softmax_dim=self.softmax_dim)
+        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.b_routing, softmax_dim=self.softmax_dim)
 
-        probs = self.compute_probs(final_caps)
+        logits = self.compute_logits(final_caps)
 
         decoder_input = self.create_decoder_input(final_caps, t)
         recon = self.decoder(decoder_input)
 
-        return probs, recon, final_caps
+        return logits, recon, final_caps
 
 
 class BaselineCNN(_Net):
