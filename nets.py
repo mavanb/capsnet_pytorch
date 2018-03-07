@@ -1,8 +1,8 @@
 import torch
 from torch.autograd import Variable
 from torch import nn
-from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer
-from utils import one_hot, new_grid_size, padding_same_tf, dynamic_routing, init_weights, parameter
+from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer, DynamicRouting
+from utils import one_hot, new_grid_size, padding_same_tf, init_weights, flex_profile
 import torch.nn.functional as F
 from torch.nn.modules.module import _addindent
 import numpy as np
@@ -85,12 +85,6 @@ class ToyCapsNet(_CapsNet):
                                                   vec_len_final, routing_iters, stdev=0.1)
 
         self.dynamic_routing = None
-        if bias_routing:
-            b_routing = parameter(torch.zeros(final_caps, vec_len_final))
-            b_routing.data.fill_(0.1)
-            self.b_routing = b_routing
-        else:
-            self.b_routing = None
 
         self.decoder = nn.Sequential(
             nn.Linear(vec_len_final * final_caps, 52),
@@ -155,18 +149,14 @@ class BasicCapsNet(_CapsNet):
         self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
                                                   vec_len_digit, routing_iters, stdev_W)
 
-        self.dynamic_routing = dynamic_routing
-        if bias_routing:
-            b_routing = parameter(torch.zeros(digit_caps, vec_len_digit))
-            b_routing.data.fill_(0.1)
-            self.b_routing = b_routing
-        else:
-            self.b_routing = None
+        self.dynamic_routing = DynamicRouting(digit_caps, in_features_dense_layer, vec_len_digit, softmax_dim,
+                                              bias_routing)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
         self.softmax_dim = softmax_dim
 
+    @flex_profile
     def forward(self, x, t=None):
         # apply conv layer
         conv1 = self.relu(self.conv1(x))
@@ -181,7 +171,8 @@ class BasicCapsNet(_CapsNet):
         all_final_caps = self.dense_caps_layer(primary_caps_flat)
 
         # compute digit capsules
-        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.b_routing, softmax_dim=self.softmax_dim)
+        # final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.bias, softmax_dim=self.softmax_dim)
+        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters)
 
         logits = self.compute_logits(final_caps)
 

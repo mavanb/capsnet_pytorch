@@ -1,6 +1,58 @@
 import torch
 import torch.nn as nn
-from utils import variable, squash, parameter, init_weights
+from utils import variable, squash, init_weights, flex_profile
+
+
+class DynamicRouting(nn.Module):
+
+    def __init__(self, j, i, n, softmax_dim, bias_routing):
+        super().__init__()
+        self.soft_max = torch.nn.Softmax(dim=softmax_dim) ## dim is supposed to be 1, but 2 seems to work way better
+        self.j = j
+        self.i = i
+        self.n = n
+
+        # init depends on batch_size which depends on input size, declare dynamically in forward. see:
+        # https://discuss.pytorch.org/t/dynamic-parameter-declaration-in-forward-function/427/2
+        self.b_vec = None
+
+        if bias_routing:
+            b_routing = nn.Parameter(torch.zeros(j, n))
+            b_routing.data.fill_(0.1)
+            self.bias = b_routing
+        else:
+            self.bias = None
+
+    @flex_profile
+    def forward(self, u_hat, iters):
+
+        b = u_hat.shape[0]
+
+        if self.b_vec is None:
+            self.b_vec = variable(torch.zeros(b, self.j, self.i))
+        b_vec = self.b_vec
+
+        for index in range(iters):
+            # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
+            c_vec = self.soft_max(b_vec)
+
+            # in einsum: bij, bjin-> bjn
+            # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
+            s_vec = torch.matmul(c_vec.view(b, self.j, 1, self.i), u_hat).squeeze()
+            if type(self.bias) == torch.nn.Parameter:
+                s_vec_bias = s_vec + self.bias
+            else:
+                s_vec_bias = s_vec
+            v_vec = squash(s_vec_bias)
+
+            if index < (iters - 1):  # skip update last iter
+                # in einsum: "bjin, bjn-> bij", inner product over n
+                # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
+                # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
+                b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
+                                             v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0,
+                                                                                                    keepdim=True)
+        return v_vec
 
 
 class LinearPrimaryLayer(nn.Module):
@@ -30,6 +82,7 @@ class Conv2dPrimaryLayer(nn.Module):
 
         self.squash_dim = squash_dim
 
+    @flex_profile
     def forward(self, input):
         """
         :param input: [b, c, h, w]
@@ -55,8 +108,9 @@ class DenseCapsuleLayer(nn.Module):
         self.vector_len_out = vec_len_out
         self.routing_iters = routing_iters
 
-        self.W = parameter(stdev * torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
+        self.W = nn.Parameter(stdev * torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
 
+    @flex_profile
     def forward(self, input):
         batch_size = input.shape[0]
         input_ = input.view(batch_size, 1, self.in_capsules, self.vector_len_in, 1)

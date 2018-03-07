@@ -1,24 +1,23 @@
 from __future__ import print_function
 
-# pytorch imports
-from torch.nn.modules.loss import NLLLoss
-from data_loader import get_dataset
+import time
 
 # ignite import
 from ignite.engine import Events
 from ignite.handlers.evaluate import Evaluate
 from ignite.handlers.logging import log_simple_moving_average
+# pytorch imports
+from torch.nn.modules.loss import NLLLoss
 
+from configurations.config_utils import get_conf_logger
+from data.data_loader import get_dataset
 # custom ignite features
 from ignite_features.handlers import *
-
+from ignite_features.runners import default_run
 # model imports
 from nets import BaselineCNN
 from utils import variable
-from configurations.config_utils import get_conf_logger
 
-from ignite_features.runners import default_run
-import time
 
 def custom_args(parser):
     parser.add('--baseline_cnn_config', is_config_file=True, default="configurations/baseline_cnn.conf",

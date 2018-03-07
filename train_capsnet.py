@@ -1,21 +1,22 @@
 from __future__ import print_function
 
-from torchvision import transforms
 import time
 
 # ignite import
 from ignite.engine import Events
 from ignite.handlers.evaluate import Evaluate
 from ignite.handlers.logging import log_simple_moving_average
+from torchvision import transforms
 
+from configurations.config_utils import get_conf_logger
+from data.data_loader import get_dataset
+from ignite_features.excessive_testing import excessive_testing_handler
+from ignite_features.handlers import *
+from ignite_features.runners import default_run
+from loss import CapsuleLoss
 # own imports
 from nets import BasicCapsNet
-from utils import variable
-from loss import CapsuleLoss
-from configurations.config_utils import get_conf_logger
-from ignite_features.runners import default_run
-from ignite_features.handlers import *
-from data_loader import get_dataset
+from utils import variable, flex_profile
 
 
 def custom_args(parser):
@@ -32,7 +33,9 @@ def custom_args(parser):
     parser.add_argument('--softmax_dim', type=int, required=True, help="")
     parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
     parser.add_argument('--bias_routing', type=bool, default=False, help="whether to use bias in routing")
+    parser.add_argument('--excessive_testing', type=bool, default=False, help="Do excessive tests on test set")
     return parser
+
 
 def main():
     conf, logger = get_conf_logger(custom_args=custom_args)
@@ -49,6 +52,7 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
+    @flex_profile
     def train_function(batch):
         model.train()
         optimizer.zero_grad()
@@ -64,6 +68,7 @@ def main():
 
         loss.backward()
         optimizer.step()
+
         return loss.data[0], margin_loss.data[0], recon_loss.data[0], (time.time(), data.shape[0]), acc
 
     def validate_function(batch):
@@ -96,12 +101,14 @@ def main():
                                   history_transform=lambda x: x[4],
                                   should_log=lambda trainer: trainer.current_iteration % conf.log_interval == 0,
                                   logger=logger)
-        trainer.add_event_handler(Events.ITERATION_COMPLETED, get_plot_training_loss_handler(vis,
-                                                                                             plot_every=conf.log_interval,
-                                                                                             transform=lambda x: x[0]))
+        trainer.add_event_handler(Events.ITERATION_COMPLETED, vis_training_loss_handler(vis,
+                                                            plot_every=conf.log_interval, transform=lambda x: x[0]))
+
         if conf.print_time:
             trainer.add_event_handler(Events.EPOCH_COMPLETED, time_logger_handler(logger, transform=lambda x: x[3]))
         trainer.add_event_handler(Events.EPOCH_COMPLETED, epoch_update, model)
+        if conf.excessive_testing:
+            trainer.add_event_handler(Events.EPOCH_COMPLETED, excessive_testing_handler(vis, conf, 3), model)
         trainer.add_event_handler(Events.EPOCH_COMPLETED,
                                   Evaluate(evaluator, val_loader, epoch_interval=1, clear_history=False))
 
@@ -109,6 +116,7 @@ def main():
         evaluator.add_event_handler(Events.COMPLETED, get_log_validation_loss_and_accuracy_handler(logger), model)
         evaluator.add_event_handler(Events.COMPLETED, get_plot_validation_accuracy_handler(vis), trainer, model)
         evaluator.add_event_handler(Events.COMPLETED, early_stop_and_save_handler(conf, logger), model)
+
 
     default_run(logger, conf, dataset, model, train_function, validate_function, add_events)
 

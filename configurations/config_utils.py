@@ -25,7 +25,8 @@ def get_conf_logger(custom_args=lambda x: x):
         logger = print
 
     # combined configs
-    conf.model_checkpoint_path = "{}/{}".format(conf.trained_model_path, conf.model_name)
+    conf.model_checkpoint_path = "{}/{}{}".format(conf.trained_model_path, conf.model_name,
+                                                  "_debug" if conf.debug else "")
     conf.model_load_path = "{}/{}".format(conf.trained_model_path, conf.load)
 
     # log configurations summary

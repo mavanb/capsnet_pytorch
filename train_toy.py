@@ -1,19 +1,18 @@
 from __future__ import print_function
 
+import os
+import pickle
 
+import numpy as np
 import torch
-from nets import ToyCapsNet
-from utils import variable
-from loss import CapsuleLoss
-from configurations.config_utils import get_conf_logger
-
 from torch.utils.data import DataLoader
 
+from configurations.config_utils import get_conf_logger
+from data.data_loader import Gaussian2D
+from loss import CapsuleLoss
+from nets import ToyCapsNet
 from utils import squash
-from data_loader import Gaussian2D
-import pickle
-import numpy as np
-import os
+from utils import variable
 
 
 def custom_args(parser):
@@ -39,7 +38,6 @@ def logged_dynamic_routing(u_hat, iters, bias):
     dim_next_layer]
     """
     routing_point = RoutingPoint(u_hat.data.cpu().numpy() if torch.cuda.is_available() else u_hat.data.numpy())
-
 
     b, j, i, n = u_hat.shape
     b_vec = variable(torch.zeros(b, j, i))

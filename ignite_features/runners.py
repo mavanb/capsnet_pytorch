@@ -1,12 +1,15 @@
 from __future__ import print_function
 
-import visdom
-import torch
-import numpy as np
-from ignite.trainer import Trainer
-from ignite.evaluator import Evaluator
-from data_loader import get_train_valid_data
 import os
+
+import numpy as np
+import torch
+import visdom
+from ignite.evaluator import Evaluator
+from ignite.trainer import Trainer
+
+from data.data_loader import get_train_valid_data
+
 
 def default_run(logger, conf, dataset, model, train_function, validate_function, add_events):
 

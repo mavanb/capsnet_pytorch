@@ -3,23 +3,17 @@ import torch
 import os
 
 
-def get_plot_training_loss_handler(vis, plot_every, transform=lambda x: x, window_size=100):
+def vis_training_loss_handler(vis, plot_every, transform=lambda x: x):
+    win = vis.line(X=np.array([1]), Y=np.array([np.nan]),
+                                      opts=dict(xlabel='# Iterations', ylabel='Loss', title='Training Loss'))
 
-    train_loss_plot_window = vis.line(X=np.array([1]), Y=np.array([np.nan]),
-                                      opts=dict(
-                                          xlabel='# Iterations',
-                                          ylabel='Loss',
-                                          title='Training Loss')
-                                      )
-
-    def plot_training_loss_to_visdom(trainer):
+    def loss_to_visdom(trainer):
         if trainer.current_iteration % plot_every == 0:
             vis.line(X=np.array([trainer.current_iteration]),
-                     Y=np.array([trainer.history.simple_moving_average(window_size=window_size, transform=transform)]),
-                     win=train_loss_plot_window,
+                     Y=np.array([transform(trainer.history[-1])]),
+                     win=win,
                      update='append')
-
-    return plot_training_loss_to_visdom
+    return loss_to_visdom
 
 
 def get_plot_validation_accuracy_handler(vis, transform=lambda x: x):

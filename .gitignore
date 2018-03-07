@@ -3,9 +3,9 @@
 
 
 logs/**
-mnist/**
-cifar10/**
-
+data/mnist/**
+data/cifar10/**
+data/smallnorb/**
 capsule_example/**
 
 sandbox/

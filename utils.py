@@ -4,16 +4,21 @@ import torch.nn as nn
 import math
 
 
+def flex_profile(func):
+    """ Decorator for the @proflile decorator of kernprof. Avoids having to remove it all the time. Profiled the effect
+     of this decorator itself: decorator is only called on function init. Note: do not use in frequently called nested
+    functions (in others words, if the function is instantiated very often."""
+    try:
+        func = profile(func)
+    except NameError:
+        pass
+    return func
+
+
 def variable(tensor, volatile=False):
     if torch.cuda.is_available():
         return Variable(tensor, volatile=volatile).cuda()
     return Variable(tensor, volatile=volatile)
-
-
-def parameter(tensor):
-    if torch.cuda.is_available():
-        return nn.Parameter(tensor.cuda())
-    return nn.Parameter(tensor)
 
 
 def new_grid_size(grid, kernel_size, stride=1, padding=0):
@@ -54,44 +59,11 @@ def one_hot(labels, depth):
         else:
             return torch.sparse.torch.eye(depth).index_select(dim=0, index=labels)
 
-# c_vec_temp = variable(torch.FloatTensor(128, 10, 1152).fill_(8.6806 / 10000))
-
-def dynamic_routing(u_hat, iters, bias, softmax_dim=1):
-    """
-    Implementation of routing algorithm described in Dynamic Routing Hinton 2017.
-    :param input: u_hat, Variable containing the of the next layer capsules given each previous layer capsule. shape:
-    [batch_size, num_caps_next_layer, num_caps_prev_layer, dim_next_layer]
-    :param iters: number of iterations in routing algo.
-    :return: next layer predictions sized by probability/correspondence. shape: [batch_size, num_caps_next_layer,
-    dim_next_layer]
-    """
-    b, j, i, n = u_hat.shape
-    b_vec = variable(torch.zeros(b, j, i))
-
-    for index in range(iters):
-        # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
-        c_vec = torch.nn.Softmax(dim=softmax_dim)(b_vec) ## dim is supposed to be 1, but 2 seems to work way better
-
-        # in einsum: bij, bjin-> bjn
-        # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
-        s_vec = torch.matmul(c_vec.view(b, j, 1, i), u_hat).squeeze()
-        if type(bias) == torch.nn.Parameter:
-            s_vec_bias = s_vec + bias
-        else:
-            s_vec_bias = s_vec
-        v_vec = squash(s_vec_bias)
-
-        if index < (iters - 1):  # skip update last iter
-            # in einsum: "bjin, bjn-> bij", inner product over n
-            # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
-            # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
-            b_vec = b_vec + torch.matmul(u_hat.contiguous().view(b, j, i, 1, n), v_vec.contiguous().view(b, j, 1, n, 1)).squeeze().mean(dim=0, keepdim=True)
-
-    return v_vec
-
 
 def init_weights(module, weight_mean=0, weight_stddev=0.1, bias_mean=0.1):
     module.weight.data.normal_(weight_mean, weight_stddev)
     module.bias.data.fill_(bias_mean)
     return module
+
+
 
