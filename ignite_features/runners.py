@@ -13,7 +13,7 @@ from data.data_loader import get_train_valid_data
 
 def default_run(logger, conf, dataset, model, train_function, validate_function, add_events):
 
-    # init ignite
+    # init visdom
     vis = visdom.Visdom()
     if not vis.check_connection():
         raise RuntimeError("Visdom server not running.")
@@ -37,7 +37,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
     if torch.cuda.is_available():
         model.cuda()
 
-    if conf.load:
+    if conf.load_model:
         if os.path.isfile(conf.model_load_path):
             model = torch.load(conf.model_load_path)
             logger("Loaded model.")

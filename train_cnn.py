@@ -22,7 +22,7 @@ from utils import variable
 def custom_args(parser):
     parser.add('--baseline_cnn_config', is_config_file=True, default="configurations/baseline_cnn.conf",
           help='configurations file path')
-    parser.add_argument('--model_name', type=str, default="baseline_cnn", help='Name of the model.')
+    parser.add_argument('--model_name', type=str, required=True, help='Name of the model.')
     parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
     return parser
 

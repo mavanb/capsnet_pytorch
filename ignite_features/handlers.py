@@ -9,11 +9,26 @@ def vis_training_loss_handler(vis, plot_every, transform=lambda x: x):
 
     def loss_to_visdom(trainer):
         if trainer.current_iteration % plot_every == 0:
+            Y = np.array([trainer.history.simple_moving_average(window_size=plot_every, transform=transform)])
             vis.line(X=np.array([trainer.current_iteration]),
-                     Y=np.array([transform(trainer.history[-1])]),
+                     Y=Y,
                      win=win,
                      update='append')
     return loss_to_visdom
+
+
+def vis_training_acc_handler(vis, plot_every, transform=lambda x: x):
+    win = vis.line(X=np.array([1]), Y=np.array([np.nan]),
+                                      opts=dict(xlabel='# Iterations', ylabel='Acc', title='Batch Accuracy'))
+
+    def acc_to_visdom(trainer):
+        if trainer.current_iteration % plot_every == 0:
+            Y = np.array([trainer.history.simple_moving_average(window_size=plot_every, transform=transform)])
+            vis.line(X=np.array([trainer.current_iteration]),
+                     Y=Y,
+                     win=win,
+                     update='append')
+    return acc_to_visdom
 
 
 def get_plot_validation_accuracy_handler(vis, transform=lambda x: x):

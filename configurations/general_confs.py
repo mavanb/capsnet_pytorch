@@ -1,5 +1,6 @@
 import configargparse
 import torch.cuda
+from configurations.config_utils import parse_bool
 
 
 p = configargparse.get_argument_parser()
@@ -17,18 +18,16 @@ else:
 p.add_argument('--trained_model_path', required=True, type=str, help='Path of checkpoints.')
 p.add_argument('--batch_size', type=int, required=True, help='Batch size.')
 p.add_argument('--epochs', type=int, required=True, help='Number of epochs')
-
-
-# optional arguments
-p.add_argument('--seed', type=int, default=None, help="Torch and numpy random seed. To ensure repeatability.")
-p.add_argument('--save_trained', type=bool, default=False, help='Save fully trained model for inference.')
-p.add_argument('--debug', type=bool, default=False, help="debug mode: break early")
-p.add_argument('--print_time', type=bool, default=False, help="print train time per sample")
-p.add_argument('--load', type=str, default=None, help="Name of the model to load")
-p.add_argument('--log_interval', type=int, default=10,
+p.add_argument('--seed', type=int, required=True, help="Torch and numpy random seed. To ensure repeatability.")
+p.add_argument('--save_trained', type=parse_bool, required=True, help='Save fully trained model for inference.')
+p.add_argument('--debug', type=parse_bool, required=True, help="debug mode: break early")
+p.add_argument('--print_time', type=parse_bool, required=True, help="print train time per sample")
+p.add_argument('--load_name', type=str, required=True, help="Name of the model to load")
+p.add_argument('--load_model', type=parse_bool, required=True, help="Load model yes/no")
+p.add_argument('--log_interval', type=int, required=True,
                     help='how many batches to wait before logging training status')
-p.add_argument("--log_file", type=str, default=None, help="log file to log output to")
-p.add_argument("--drop_last", type=bool, default=False, help="drop last incomplete batch")
-p.add_argument('--shuffle', type=bool, default=False, help='Shuffle dataset')
-
+p.add_argument("--log_file_name", type=str, required=True, help="log file to log output to")
+p.add_argument("--log_file", type=parse_bool, required=True, help="log file to log output to")
+p.add_argument("--drop_last", type=parse_bool, required=True, help="drop last incomplete batch")
+p.add_argument('--shuffle', type=parse_bool, required=True, help='Shuffle dataset')
 

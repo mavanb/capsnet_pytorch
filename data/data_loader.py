@@ -9,7 +9,8 @@ from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 from torchvision.datasets import MNIST, CIFAR10
 from data.smallnorb import SmallNORB
-from torchvision.transforms import Compose, Resize, RandomCrop, ToTensor, ColorJitter
+from torchvision.transforms import Compose, Resize, RandomCrop, ToTensor, ColorJitter, Normalize
+
 
 def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffle=True, num_workers=4,
                          pin_memory=False, train_max=None, valid_max=None, drop_last=False):
@@ -74,19 +75,23 @@ def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffl
 def get_dataset(dataset_name, transform=ToTensor(), train=True):
     if dataset_name == "mnist":
         dataset = MNIST(download=True, root="./data/mnist", transform=transform, train=train)
+        labels = 10
     elif dataset_name == "cifar10":
         dataset = CIFAR10(download=True, root="./data/cifar10", transform=transform, train=train)
+        labels = 10
     elif dataset_name == "smallnorb":
         transform = Compose([
             Resize(48),
-            ColorJitter(brightness=0.247, contrast=0.8),  #convert brightness 	63/255=0.247
+            # ColorJitter(brightness=0.247, contrast=0.8),  #convert brightness 	63/255=0.247
             RandomCrop(32),
             ToTensor(),
+            Normalize([0], [1])
         ])
-        dataset = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=train)
+        dataset = SmallNORB(download=True, root="./data/small_norb", transform=transform, train=train)
+        labels = 5
     else:
         raise ValueError("Name dataset does not exists.")
-    return dataset, dataset[0][0].shape
+    return dataset, dataset[0][0].shape, labels
 
 
 

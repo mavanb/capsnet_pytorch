@@ -7,7 +7,7 @@ class DynamicRouting(nn.Module):
 
     def __init__(self, j, i, n, softmax_dim, bias_routing):
         super().__init__()
-        self.soft_max = torch.nn.Softmax(dim=softmax_dim) ## dim is supposed to be 1, but 2 seems to work way better
+        self.soft_max = torch.nn.Softmax(dim=softmax_dim)
         self.j = j
         self.i = i
         self.n = n
@@ -22,6 +22,9 @@ class DynamicRouting(nn.Module):
             self.bias = b_routing
         else:
             self.bias = None
+
+        # that can be implemented to enable analysis at end of each routing iter
+        self.log_function = None
 
     @flex_profile
     def forward(self, u_hat, iters):
@@ -50,8 +53,10 @@ class DynamicRouting(nn.Module):
                 # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
                 # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
-                                             v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0,
-                                                                                                    keepdim=True)
+                                             v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0, keepdim=True)
+
+            if self.log_function:
+                self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
         return v_vec
 
 

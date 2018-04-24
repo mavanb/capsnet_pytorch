@@ -241,18 +241,3 @@ class CapsNetDecoder(nn.Module):
         return x
 
 
-if __name__ == '__main__':
-
-    # create fake data and labels
-    data = Variable(torch.randn(3, 1, 28, 28))
-    y = Variable(torch.LongTensor([6, 3, 2])).view(3, 1)
-
-    # apply module
-    net = BasicCapsNet(digit_caps=10)
-    class_probs, reconstructions = net(data, y)
-
-    # checks
-    assert(reconstructions.shape == torch.Size([3, 1, 28, 28]))
-    assert(class_probs.shape == torch.Size([3, 10]))
-    print("Checks passed")
-

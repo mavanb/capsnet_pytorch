@@ -3,7 +3,6 @@ from torch.autograd import Variable
 import torch.nn as nn
 import math
 
-
 def flex_profile(func):
     """ Decorator for the @proflile decorator of kernprof. Avoids having to remove it all the time. Profiled the effect
      of this decorator itself: decorator is only called on function init. Note: do not use in frequently called nested
@@ -39,7 +38,6 @@ def padding_same_tf(grid, kernel, stride):
 
 
 def squash(tensor, dim=-1):
-    #todo check if safe norm is required here: not present in pytorch githubs
     squared_norm = (tensor ** 2).sum(dim=dim, keepdim=True)
     scale = squared_norm / (1. + squared_norm)
     return scale * tensor / torch.sqrt(squared_norm + 1e-7)

@@ -18,13 +18,13 @@ from utils import variable
 def custom_args(parser):
     parser.add('--toy_capsnet_config', is_config_file=True, default="configurations/toy_capsnet.conf",
                help='configurations file path')
-    parser.add_argument('--model_name', type=str, default="toy_caps_net", help='Name of the model.')
+    parser.add_argument('--model_name', type=str, required=True, help='Name of the model.')
     parser.add_argument('--alpha', type=float, required=True, help="Alpha of CapsuleLoss")
     parser.add_argument('--m_plus', type=float, required=True, help="m_plus of margin loss")
     parser.add_argument('--m_min', type=float, required=True, help="m_min of margin loss")
     parser.add_argument('--prim_caps', type=int, required=True, help="Number of primary capsules")
     parser.add_argument('--routing_iters', type=int, required=True, help="Number of iterations in the routing algo.")
-    parser.add_argument('--bias_routing', type=bool, default=False, help="whether to use bias in routing")
+    parser.add_argument('--bias_routing', type=bool, required=True, help="whether to use bias in routing")
     return parser
 
 

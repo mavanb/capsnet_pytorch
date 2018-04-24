@@ -7,7 +7,6 @@ import torch
 
 import numpy as np
 import struct
-from tqdm import tqdm
 from torchvision.datasets.mnist import MNIST
 
 
@@ -170,7 +169,7 @@ def read_label_file(path):
         struct.unpack('<BBBB', f.read(4))  # ignore this integer
 
         labels = np.zeros(shape=num_examples, dtype=np.int32)
-        for i in tqdm(range(num_examples), desc='Loading categories...'):
+        for i in range(num_examples):
             category, = struct.unpack('<i', f.read(4))
             labels[i] = category
         labels = labels.repeat(2) # use both left and right image
@@ -186,7 +185,7 @@ def read_image_file(path):
 
         examples = np.zeros(shape=(num_examples * channels, height, width), dtype=np.uint8)
 
-        for i in tqdm(range(num_examples * channels), desc='Loading images...'):
+        for i in range(num_examples * channels):
             # Read raw image data and restore shape as appropriate
             image = struct.unpack('<' + height * width * 'B', f.read(height * width))
             image = np.uint8(np.reshape(image, newshape=(height, width)))
