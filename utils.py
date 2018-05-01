@@ -1,7 +1,6 @@
 import torch
-from torch.autograd import Variable
-import torch.nn as nn
 import math
+
 
 def flex_profile(func):
     """ Decorator for the @proflile decorator of kernprof. Avoids having to remove it all the time. Profiled the effect
@@ -12,12 +11,6 @@ def flex_profile(func):
     except NameError:
         pass
     return func
-
-
-def variable(tensor, volatile=False):
-    if torch.cuda.is_available():
-        return Variable(tensor, volatile=volatile).cuda()
-    return Variable(tensor, volatile=volatile)
 
 
 def new_grid_size(grid, kernel_size, stride=1, padding=0):
@@ -48,14 +41,8 @@ def one_hot(labels, depth):
     :param labels: 1D-tensor or 1D-Variable
     :param depth: output length of one hot vectors i.e. number of classes
     :return: 2D-tensor or 2D-Variable (depending on input) of shape [len(labels), depth]
-    """
-    if type(labels) == Variable:
-        return variable(torch.sparse.torch.eye(depth)).index_select(dim=0, index=labels)
-    else:
-        if torch.cuda.is_available():
-            return torch.sparse.torch.eye(depth).cuda().index_select(dim=0, index=labels.cuda())
-        else:
-            return torch.sparse.torch.eye(depth).index_select(dim=0, index=labels)
+    # """
+    return torch.eye(depth).index_select(dim=0, index=labels)
 
 
 def init_weights(module, weight_mean=0, weight_stddev=0.1, bias_mean=0.1):
@@ -63,5 +50,17 @@ def init_weights(module, weight_mean=0, weight_stddev=0.1, bias_mean=0.1):
     module.bias.data.fill_(bias_mean)
     return module
 
+
+def convert_grid_index_to_flat(tot_caps, tot_height, tot_width):
+    """ Given grid size and number of channels returns function that gives all indices that come from a certain postion
+    in the old grid."""
+    def convert(height, width):
+        """ Height, width are the ocation of in the grid, returns the indices in the flattened vector."""
+        return [caps_idx * tot_height * tot_width + height * tot_width + width for caps_idx in range(tot_caps)]
+    return convert
+
+
+def get_device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 

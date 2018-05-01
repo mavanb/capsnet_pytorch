@@ -29,7 +29,7 @@ class _Net(nn.Module):
         :param label: [batch_size]
         :return: batch accurarcy (float)
         """
-        return sum(self.compute_predictions(logits).data == label.data) / logits.size(0)
+        return sum(self.compute_predictions(logits) == label).float() / logits.size(0)
 
     @staticmethod
     def _num_parameters(module):
@@ -172,14 +172,14 @@ class BasicCapsNet(_CapsNet):
 
         # compute digit capsules
         # final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.bias, softmax_dim=self.softmax_dim)
-        final_caps = self.dynamic_routing(all_final_caps, self.routing_iters)
+        final_caps, mask_rato = self.dynamic_routing(all_final_caps, self.routing_iters)
 
         logits = self.compute_logits(final_caps)
 
         decoder_input = self.create_decoder_input(final_caps, t)
         recon = self.decoder(decoder_input)
 
-        return logits, recon, final_caps
+        return logits, recon, final_caps, mask_rato
 
 
 class BaselineCNN(_Net):

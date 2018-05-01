@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
-from utils import variable, squash, init_weights, flex_profile
+from utils import squash, init_weights, flex_profile, get_device
+
+
+# from nets import _CapsNet
 
 
 class DynamicRouting(nn.Module):
@@ -32,7 +35,7 @@ class DynamicRouting(nn.Module):
         b = u_hat.shape[0]
 
         if self.b_vec is None:
-            self.b_vec = variable(torch.zeros(b, self.j, self.i))
+            self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(),  requires_grad=False)
         b_vec = self.b_vec
 
         for index in range(iters):
@@ -53,11 +56,30 @@ class DynamicRouting(nn.Module):
                 # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
                 # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
-                                             v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0, keepdim=True)
+                                             v_vec.view(b, self.j, 1, self.n, 1)).squeeze()
+                ## Found very strange mean in my code, this takes an average off the b_ij update over the batch, which
+                ## does not make sense to me. Maybe it is their because other repo inplement the above rule as product
+                ## and then sum. I did found same error in other capsule net repo. Strange error, because I checked
+                ## every line 1000 times.
+                # b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
+                #                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0, keepdim=True)
+
+                # sparsify before last itter
+                if index < (iters - 2):  # skip update last iter
+                    # todo include activaton
+                    # activation = _CapsNet.compute_logits(v_vec)
+                    #
+                    avg_b_j = b_vec.sum(dim=2) / self.i
+                    a, _ = torch.max(avg_b_j, dim=1)
+                    exponent = avg_b_j - a.view(-1, 1)
+                    threshold = torch.tensor(0.0999).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
+                    keep_values = (avg_b_j > threshold.view(-1, 1)).float()
+                    mask_rato = len(keep_values[keep_values==0]) / (self.j * b)
+                    b_vec = keep_values.view(-1, self.j, 1) * b_vec
 
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
-        return v_vec
+        return v_vec, mask_rato
 
 
 class LinearPrimaryLayer(nn.Module):

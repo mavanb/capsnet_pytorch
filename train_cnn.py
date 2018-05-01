@@ -2,21 +2,26 @@ from __future__ import print_function
 
 import time
 
+
 # ignite import
-from ignite.engine import Events
-from ignite.handlers.evaluate import Evaluate
-from ignite.handlers.logging import log_simple_moving_average
-# pytorch imports
+from ignite.engines.engine import Events
+from ignite_features.log_handlers import LogEpochMetricHandler
+from ignite_features.plot_handlers import VisEpochPlotter
+from ignite_features.metric import TimeMetric
+from ignite_features.runners import default_run
+
+# torch import
+from torchvision import transforms
+import torch
+
+# model import
+from nets import BaselineCNN
 from torch.nn.modules.loss import NLLLoss
 
+# utils
 from configurations.config_utils import get_conf_logger
 from data.data_loader import get_dataset
-# custom ignite features
-from ignite_features.handlers import *
-from ignite_features.runners import default_run
-# model imports
-from nets import BaselineCNN
-from utils import variable
+from utils import get_device
 
 
 def custom_args(parser):
@@ -24,70 +29,62 @@ def custom_args(parser):
           help='configurations file path')
     parser.add_argument('--model_name', type=str, required=True, help='Name of the model.')
     parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
+    parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
     return parser
 
 
 def main():
     conf, logger = get_conf_logger(custom_args)
 
-    dataset, shape = get_dataset(conf.dataset)
+    transform = transforms.ToTensor()
+    dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 
-    model = BaselineCNN(classes=10, in_channels=shape[0], in_height=shape[1], in_width=shape[2])
+    model = BaselineCNN(classes=10, in_channels=data_shape[0], in_height=data_shape[1], in_width=data_shape[2])
 
     nlll = NLLLoss()
 
     optimizer = torch.optim.Adam(model.parameters())
 
-    def train_function(batch):
+    device = get_device()
+
+    def train_function(engine, batch):
         model.train()
         optimizer.zero_grad()
 
-        data = variable(batch[0])
-        labels = variable(batch[1])
+        data = batch[0].to(device)
+        labels = batch[1].to(device)
 
         logits = model(data)
+        acc = model.compute_acc(logits, labels)
 
         loss = nlll(logits, labels)
 
         loss.backward()
         optimizer.step()
-        return loss.data[0], None, None, (time.time(), data.shape[0])
+        return {"loss": loss.item(), "time": (time.time(), data.shape[0]), "acc": acc}
 
-    def validate_function(batch):
+    def validate_function(engine, batch):
         model.eval()
 
-        data = variable(batch[0], volatile=True)
-        labels = variable(batch[1])
+        with torch.no_grad():
+            data = batch[0].to(device)
+            labels = batch[1].to(device)
 
-        class_probs = model(data)
+            class_probs = model(data)
 
-        loss = nlll(class_probs, labels)
-        acc = model.compute_acc(class_probs, labels)
+            loss = nlll(class_probs, labels)
+            acc = model.compute_acc(class_probs, labels)
 
-        return loss.data[0], acc, model.epoch
+        return {"loss": loss.item(), "acc": acc, "epoch": model.epoch}
 
     def add_events(trainer, evaluator, train_loader, val_loader, vis):
-        # trainer event handlers
-        trainer.add_event_handler(Events.ITERATION_COMPLETED,
-                                  log_simple_moving_average,
-                                  window_size=100,
-                                  metric_name="NLL",
-                                  history_transform=lambda x: x[0],
-                                  should_log=lambda trainer: trainer.current_iteration % conf.log_interval == 0,
-                                  logger=logger)
-        trainer.add_event_handler(Events.ITERATION_COMPLETED, get_plot_training_loss_handler(vis,
-                                                                                             plot_every=conf.log_interval,
-                                                                                             transform=lambda x: x[0]))
-        if conf.print_time:
-            trainer.add_event_handler(Events.EPOCH_COMPLETED, time_logger_handler(logger, transform=lambda x: x[3]))
-        trainer.add_event_handler(Events.EPOCH_COMPLETED, epoch_update, model)
-        trainer.add_event_handler(Events.EPOCH_COMPLETED,
-                                  Evaluate(evaluator, val_loader, epoch_interval=1, clear_history=False))
 
-        # evaluator event handlers
-        evaluator.add_event_handler(Events.COMPLETED, get_log_validation_loss_and_accuracy_handler(logger), model)
-        evaluator.add_event_handler(Events.COMPLETED, get_plot_validation_accuracy_handler(vis), trainer, model)
-        evaluator.add_event_handler(Events.COMPLETED, early_stop_and_save_handler(conf, logger), model)
+        if conf.print_time:
+            TimeMetric(lambda x: x["time"]).attach(trainer, "time")
+            trainer.add_event_handler(Events.EPOCH_COMPLETED,
+                                      VisEpochPlotter(trainer, vis, "time", "Time in s", "Time per example"))
+            trainer.add_event_handler(Events.EPOCH_COMPLETED,
+                                      LogEpochMetricHandler(logger, '\nTime per example: {:.2f} sec', "time"))
 
     default_run(logger, conf, dataset, model, train_function, validate_function, add_events)
 

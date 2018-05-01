@@ -1,5 +1,7 @@
 # capsnet_pytorch
 
+TODO
+
 ### Differences with authors code
 
 * Learning rate decay in Adam optimizer
