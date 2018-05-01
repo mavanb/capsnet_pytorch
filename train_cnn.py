@@ -82,9 +82,9 @@ def main():
         if conf.print_time:
             TimeMetric(lambda x: x["time"]).attach(trainer, "time")
             trainer.add_event_handler(Events.EPOCH_COMPLETED,
-                                      VisEpochPlotter(trainer, vis, "time", "Time in s", "Time per example"))
+                                      VisEpochPlotter(trainer, vis, "time", "Time in s", "Time per sample"))
             trainer.add_event_handler(Events.EPOCH_COMPLETED,
-                                      LogEpochMetricHandler(logger, '\nTime per example: {:.2f} sec', "time"))
+                                      LogEpochMetricHandler(logger, 'Time per example: {:.2f} sec', "time"))
 
     default_run(logger, conf, dataset, model, train_function, validate_function, add_events)
 

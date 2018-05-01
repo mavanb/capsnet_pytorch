@@ -98,7 +98,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
         evaluator.add_event_handler(Events.EPOCH_COMPLETED,
                                     VisEpochPlotter(evaluator, vis, "acc", "Acc", "Validation Acc"))
         evaluator.add_event_handler(Events.EPOCH_COMPLETED,
-                                    LogEpochMetricHandler(logger, '\nValidation set: {:.2f}', "acc"))
+                                    LogEpochMetricHandler(logger, 'Validation set: {:.2f}', "acc"))
 
     # add events custom the events
     add_events(trainer, evaluator, train_loader, val_loader, vis)
@@ -124,6 +124,12 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
     @trainer.on(Events.EPOCH_COMPLETED)
     def call_evaluator(_):
         evaluator.run(val_loader)
+
+    # make that epoch in evaluator gives correct epoch (same trainer was during run), but makes sure only runs once
+    @evaluator.on(Events.STARTED)
+    def set_train_epoch(engine):
+        engine.state.epoch = trainer.state.epoch - 1
+        engine.state.max_epochs = trainer.state.epoch
 
     # kick everything off
     trainer.run(train_loader, max_epochs=conf.epochs)

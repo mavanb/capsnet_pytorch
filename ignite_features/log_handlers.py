@@ -38,9 +38,16 @@ class LogTrainProgressHandler:
     def __call__(self, engine):
         # -1 and +1 because counting from 1, to make sure it prints 1/X and X/X
         iteration_in_epoch = ((engine.state.iteration - 1) % len(engine.state.dataloader)) + 1
-        self.logger(f"\rEpoch[{engine.state.epoch}/{engine.state.max_epochs}] "
+
+        # new line if last iteration
+        end = "\n" if len(engine.state.dataloader) == iteration_in_epoch else ""
+
+        # new line before new iteration
+        start = "\n" if iteration_in_epoch == 1 else ""
+
+        self.logger(f"\r{start}Epoch[{engine.state.epoch}/{engine.state.max_epochs}] "
                     f"Iteration[{iteration_in_epoch}/{len(engine.state.dataloader)}] "
                     f"Acc: {engine.state.metrics['batch_acc']:.2f} "
-                    f"Loss: {engine.state.metrics['batch_loss']:.2f}", end="")
+                    f"Loss: {engine.state.metrics['batch_loss']:.2f}", end=end)
 
 

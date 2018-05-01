@@ -128,7 +128,7 @@ class BasicCapsNet(_CapsNet):
     """
 
     def __init__(self, in_channels, digit_caps, vec_len_prim, vec_len_digit, routing_iters, prim_caps, in_height,
-                 in_width, softmax_dim, squash_dim, stdev_W, bias_routing):
+                 in_width, softmax_dim, squash_dim, stdev_W, bias_routing, sparse_threshold, sparsify):
         super().__init__(digit_caps)
 
         self.routing_iters = routing_iters
@@ -150,7 +150,7 @@ class BasicCapsNet(_CapsNet):
                                                   vec_len_digit, routing_iters, stdev_W)
 
         self.dynamic_routing = DynamicRouting(digit_caps, in_features_dense_layer, vec_len_digit, softmax_dim,
-                                              bias_routing)
+                                              bias_routing, sparse_threshold, sparsify)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 

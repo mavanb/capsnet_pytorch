@@ -42,7 +42,7 @@ class TimeMetric(Metric):
     """ Metric that calculated the average time computation per sample over an epoch."""
 
     def reset(self):
-        self._diff = 0.0
+        self._avg_diff = 0.0
         self._prev_time = 0.0
         self._num_examples = 0
 
@@ -51,8 +51,11 @@ class TimeMetric(Metric):
         if self._prev_time:
             batch_size = output[1]
             new_diff = (new_time - self._prev_time)
-            self._diff = (self._diff * self._num_examples + new_diff * batch_size) /\
-                         (self._num_examples + batch_size)
+            # _avg_diff gives time per sample. Thus, to update we compute the weighted average:
+            # avg_diff * (num_examples / total) + avg_new_diff * (batch_size / total)
+            # avg_new_diff * batch_size = new_diff / batch_size * batch_size = new_diff
+            self._avg_diff = (self._avg_diff * self._num_examples + new_diff) / \
+                             (self._num_examples + batch_size)
             self._num_examples += batch_size
         self._prev_time = new_time
 
@@ -60,6 +63,6 @@ class TimeMetric(Metric):
         if self._num_examples == 0:
             raise NotComputableError(
                 'TimeMetric must have received at least one batch before it can be computed')
-        return self._diff
+        return self._avg_diff
 
 

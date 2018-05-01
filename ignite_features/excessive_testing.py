@@ -37,6 +37,7 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
 
     def test_routing_iters(engine, model):
         with torch.no_grad():
+
             num_batches = len(test_loader)
             acc_values = np.zeros(shape=(num_batches, routing_test_iters))
             logits_mean_rel_diff = np.zeros(shape=(num_batches, routing_test_iters -1))
@@ -51,7 +52,7 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
 
                 for routing_iter in range(routing_test_iters):
                     model.routing_iters = routing_iter + 1
-                    class_logits, _, _ = model(data)
+                    class_logits, _, _, _ = model(data)
                     acc = model.compute_acc(class_logits, labels)
 
                     acc_values[batch_idx, routing_iter] = acc
@@ -68,7 +69,7 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
             mean_diff = logits_mean_rel_diff.mean(axis=0)
             max_diff = logits_max_rel_diff.max(axis=0)
             acc_mean = acc_values.mean(axis=0)
-            epoch = engine.current_epoch
+            epoch = engine.state.epoch
             vis.line(X=np.column_stack((epoch, epoch)), Y=np.column_stack(max_diff), update="append",
                      win=win_logits_max, opts={"legend": diff_legend})
             vis.line(X=np.column_stack((epoch, epoch)), Y=np.column_stack(mean_diff), update="append",

@@ -8,7 +8,7 @@ from utils import squash, init_weights, flex_profile, get_device
 
 class DynamicRouting(nn.Module):
 
-    def __init__(self, j, i, n, softmax_dim, bias_routing):
+    def __init__(self, j, i, n, softmax_dim, bias_routing, sparse_threshold, sparsify):
         super().__init__()
         self.soft_max = torch.nn.Softmax(dim=softmax_dim)
         self.j = j
@@ -28,11 +28,14 @@ class DynamicRouting(nn.Module):
 
         # that can be implemented to enable analysis at end of each routing iter
         self.log_function = None
+        self.sparse_threshold = sparse_threshold
+        self.sparsify = sparsify
 
     @flex_profile
     def forward(self, u_hat, iters):
 
         b = u_hat.shape[0]
+        routing_stats = {"mask_rato": 0.0, "avg_neg_devs": 0.0, "max_neg_devs":0.0}
 
         if self.b_vec is None:
             self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(),  requires_grad=False)
@@ -57,6 +60,7 @@ class DynamicRouting(nn.Module):
                 # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
                                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze()
+
                 ## Found very strange mean in my code, this takes an average off the b_ij update over the batch, which
                 ## does not make sense to me. Maybe it is their because other repo inplement the above rule as product
                 ## and then sum. I did found same error in other capsule net repo. Strange error, because I checked
@@ -65,21 +69,31 @@ class DynamicRouting(nn.Module):
                 #                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0, keepdim=True)
 
                 # sparsify before last itter
-                if index < (iters - 2):  # skip update last iter
+                if index < (iters - 2) and self.sparsify:  # skip update last iter
                     # todo include activaton
                     # activation = _CapsNet.compute_logits(v_vec)
                     #
                     avg_b_j = b_vec.sum(dim=2) / self.i
+
+                    means = (avg_b_j.sum(dim=1) / self.j).view(-1, 1)
+                    deviations = (avg_b_j - means)
+                    neg_deviations = deviations * (deviations < 0).float()
+                    avg_neg_deviations = neg_deviations.mean()
+                    max_neg_deviations = neg_deviations.min(dim=1)[0].mean(dim=0)
+
                     a, _ = torch.max(avg_b_j, dim=1)
                     exponent = avg_b_j - a.view(-1, 1)
-                    threshold = torch.tensor(0.0999, device=get_device()).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
+                    threshold = torch.tensor(self.sparse_threshold, device=get_device()).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
                     keep_values = (avg_b_j > threshold.view(-1, 1)).float()
                     mask_rato = len(keep_values[keep_values==0]) / (self.j * b)
                     b_vec = keep_values.view(-1, self.j, 1) * b_vec
 
+                    routing_stats["mask_rato"] = mask_rato
+                    routing_stats["avg_neg_devs"] = avg_neg_deviations.item()
+                    routing_stats["max_neg_devs"] = max_neg_deviations.item()
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
-        return v_vec, mask_rato
+        return v_vec, routing_stats
 
 
 class LinearPrimaryLayer(nn.Module):
@@ -120,7 +134,6 @@ class Conv2dPrimaryLayer(nn.Module):
         caps_raw = features.contiguous().view(-1, self.out_channels, self.vector_length, h, w)      # [b, c, vec, h, w]
         caps_raw = caps_raw.permute(0, 1, 3, 4, 2)  # [b, c, h, w, vec]
 
-        # squash dim is supposed to be 2, but 1 seems too work way way beter
         return squash(caps_raw, dim=self.squash_dim)
 
 
