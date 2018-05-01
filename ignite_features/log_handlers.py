@@ -32,15 +32,15 @@ class LogEpochMetricHandler(LogMetricHandler):
 
 
 class LogTrainProgressHandler:
-    def __init__(self, logger, log_every):
+    def __init__(self, logger):
         self.logger = logger
-        self.log_every = log_every
 
     def __call__(self, engine):
-        if engine.state.iteration % self.log_every == 0 or engine.state.iteration == 1:
-            self.logger(f"\rEpoch[{engine.state.epoch}/{engine.state.max_epochs}] "
-                        f"Iteration[{engine.state.iteration}/{len(engine.state.dataloader)}] "
-                        f"Acc: {engine.state.metrics['batch_acc']:.2f}] "
-                        f"Loss: {engine.state.metrics['batch_loss']:.2f}", end="")
+        # -1 and +1 because counting from 1, to make sure it prints 1/X and X/X
+        iteration_in_epoch = ((engine.state.iteration - 1) % len(engine.state.dataloader)) + 1
+        self.logger(f"\rEpoch[{engine.state.epoch}/{engine.state.max_epochs}] "
+                    f"Iteration[{iteration_in_epoch}/{len(engine.state.dataloader)}] "
+                    f"Acc: {engine.state.metrics['batch_acc']:.2f} "
+                    f"Loss: {engine.state.metrics['batch_loss']:.2f}", end="")
 
 

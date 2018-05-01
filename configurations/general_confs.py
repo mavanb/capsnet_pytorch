@@ -24,8 +24,6 @@ p.add_argument('--debug', type=parse_bool, required=True, help="debug mode: brea
 p.add_argument('--print_time', type=parse_bool, required=True, help="print train time per sample")
 p.add_argument('--load_name', type=str, required=True, help="Name of the model to load")
 p.add_argument('--load_model', type=parse_bool, required=True, help="Load model yes/no")
-p.add_argument('--log_interval', type=int, required=True,
-                    help='how many batches to wait before logging training status')
 p.add_argument("--log_file_name", type=str, required=True, help="log file to log output to")
 p.add_argument("--log_file", type=parse_bool, required=True, help="log file to log output to")
 p.add_argument("--drop_last", type=parse_bool, required=True, help="drop last incomplete batch")

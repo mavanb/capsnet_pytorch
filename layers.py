@@ -72,7 +72,7 @@ class DynamicRouting(nn.Module):
                     avg_b_j = b_vec.sum(dim=2) / self.i
                     a, _ = torch.max(avg_b_j, dim=1)
                     exponent = avg_b_j - a.view(-1, 1)
-                    threshold = torch.tensor(0.0999).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
+                    threshold = torch.tensor(0.0999, device=get_device()).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
                     keep_values = (avg_b_j > threshold.view(-1, 1)).float()
                     mask_rato = len(keep_values[keep_values==0]) / (self.j * b)
                     b_vec = keep_values.view(-1, self.j, 1) * b_vec

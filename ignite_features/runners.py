@@ -55,7 +55,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
 
     # init data sets
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
-    kwargs = {**kwargs, 'train_max': 4, 'valid_max': 2} if True else kwargs
+    kwargs = {**kwargs, 'train_max': 4, 'valid_max': 2} if conf.debug else kwargs
     kwargs = {**kwargs, "seed": conf.seed} if conf.seed else kwargs
     train_loader, val_loader = get_train_valid_data(dataset, batch_size=conf.batch_size, drop_last=conf.drop_last,
                                                     shuffle=conf.shuffle, **kwargs)
@@ -87,7 +87,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
                                   VisIterPlotter(trainer, vis, "batch_acc", "Acc", "Training Batch Acc"))
 
     # add logs handlers, requires batch_loss and batch_acc metrics
-    trainer.add_event_handler(Events.ITERATION_COMPLETED, LogTrainProgressHandler(logger, conf.log_interval))
+    trainer.add_event_handler(Events.ITERATION_COMPLETED, LogTrainProgressHandler(logger))
 
     # add eval metrics
     ValueMetric(lambda x: x["acc"]).attach(evaluator, "acc")            # for plot and logging
@@ -106,7 +106,7 @@ def default_run(logger, conf, dataset, model, train_function, validate_function,
     # add early stopping, use total loss over epoch.
     if conf.early_stop:
         early_stop_handler = EarlyStopping(patience=1, score_function=lambda engine: engine.state.metrics["loss"],
-                                           trainer=trainer)
+                                           trainer=trainer, logger=logger)
         evaluator.add_event_handler(Events.COMPLETED, early_stop_handler)
 
     # saves models

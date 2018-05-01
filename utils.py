@@ -42,7 +42,7 @@ def one_hot(labels, depth):
     :param depth: output length of one hot vectors i.e. number of classes
     :return: 2D-tensor or 2D-Variable (depending on input) of shape [len(labels), depth]
     # """
-    return torch.eye(depth).index_select(dim=0, index=labels)
+    return torch.eye(depth, device=get_device()).index_select(dim=0, index=labels)
 
 
 def init_weights(module, weight_mean=0, weight_stddev=0.1, bias_mean=0.1):
