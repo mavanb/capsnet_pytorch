@@ -3,9 +3,6 @@ import torch.nn as nn
 from utils import squash, init_weights, flex_profile, get_device
 
 
-# from nets import _CapsNet
-
-
 class DynamicRouting(nn.Module):
 
     def __init__(self, j, i, n, softmax_dim, bias_routing, sparse_threshold, sparsify):

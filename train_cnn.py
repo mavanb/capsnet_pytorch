@@ -1,27 +1,18 @@
 from __future__ import print_function
 
-import time
+import logging
 
-
-# ignite import
-from ignite.engines.engine import Events
-from ignite_features.log_handlers import LogEpochMetricHandler
-from ignite_features.plot_handlers import VisEpochPlotter
-from ignite_features.metric import TimeMetric
-from ignite_features.runners import default_run
-
-# torch import
-from torchvision import transforms
 import torch
-
-# model import
-from nets import BaselineCNN
 from torch.nn.modules.loss import NLLLoss
+from torchvision import transforms
 
-# utils
-from configurations.config_utils import get_conf_logger
+from configurations.general_confs import get_conf
 from data.data_loader import get_dataset
-from utils import get_device
+from ignite_features.trainer import CNNTrainer
+from nets import BaselineCNN
+from utils import configure_logger
+
+log = logging.getLogger(__name__)
 
 
 def custom_args(parser):
@@ -34,7 +25,10 @@ def custom_args(parser):
 
 
 def main():
-    conf, logger = get_conf_logger(custom_args)
+
+    conf, parser = get_conf(custom_args)
+    configure_logger(conf.log_file, conf.log_file_name)
+    log.info(parser.format_values())
 
     transform = transforms.ToTensor()
     dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
@@ -45,49 +39,12 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters())
 
-    device = get_device()
+    trainer = CNNTrainer(model, nlll, optimizer, dataset, conf)
 
-    def train_function(engine, batch):
-        model.train()
-        optimizer.zero_grad()
-
-        data = batch[0].to(device)
-        labels = batch[1].to(device)
-
-        logits = model(data)
-        acc = model.compute_acc(logits, labels)
-
-        loss = nlll(logits, labels)
-
-        loss.backward()
-        optimizer.step()
-        return {"loss": loss.item(), "time": (time.time(), data.shape[0]), "acc": acc}
-
-    def validate_function(engine, batch):
-        model.eval()
-
-        with torch.no_grad():
-            data = batch[0].to(device)
-            labels = batch[1].to(device)
-
-            class_probs = model(data)
-
-            loss = nlll(class_probs, labels)
-            acc = model.compute_acc(class_probs, labels)
-
-        return {"loss": loss.item(), "acc": acc, "epoch": model.epoch}
-
-    def add_events(trainer, evaluator, train_loader, val_loader, vis):
-
-        if conf.print_time:
-            TimeMetric(lambda x: x["time"]).attach(trainer, "time")
-            trainer.add_event_handler(Events.EPOCH_COMPLETED,
-                                      VisEpochPlotter(trainer, vis, "time", "Time in s", "Time per sample"))
-            trainer.add_event_handler(Events.EPOCH_COMPLETED,
-                                      LogEpochMetricHandler(logger, 'Time per example: {:.2f} sec', "time"))
-
-    default_run(logger, conf, dataset, model, train_function, validate_function, add_events)
+    trainer.run()
 
 
 if __name__ == "__main__":
     main()
+
+

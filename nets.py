@@ -146,11 +146,27 @@ class BasicCapsNet(_CapsNet):
         # grid of multiple primary caps channels is flattend, number of new channels: grid * point * channels in grid
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
-        self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
-                                                  vec_len_digit, routing_iters, stdev_W)
+        # self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
+        #                                           vec_len_digit, routing_iters, stdev_W)
 
-        self.dynamic_routing = DynamicRouting(digit_caps, in_features_dense_layer, vec_len_digit, softmax_dim,
-                                              bias_routing, sparse_threshold, sparsify)
+        # self.dynamic_routing = DynamicRouting(digit_caps, in_features_dense_layer, vec_len_digit, softmax_dim,
+        #                                       bias_routing, sparse_threshold, sparsify)
+
+        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=14,
+                                                  vec_len_in=vec_len_prim, vec_len_out=12, routing_iters=routing_iters,
+                                                  stdev=stdev_W)
+
+        self.dynamic_routing1 = DynamicRouting(j=14, i=in_features_dense_layer, n=12, softmax_dim=softmax_dim,
+                                               bias_routing=bias_routing, sparse_threshold=sparse_threshold,
+                                               sparsify=sparsify)
+
+        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=14, out_capsules=digit_caps,
+                                                  vec_len_in=12, vec_len_out=vec_len_digit, routing_iters=routing_iters,
+                                                  stdev=stdev_W)
+
+        self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=14, n=vec_len_digit, softmax_dim=softmax_dim,
+                                               bias_routing=bias_routing, sparse_threshold=sparse_threshold,
+                                               sparsify=sparsify)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
@@ -167,19 +183,28 @@ class BasicCapsNet(_CapsNet):
         b, c, w, h, m = primary_caps.shape
         primary_caps_flat = primary_caps.view(b, c*w*h, m)
 
-        # for each capsule in primary layer compute prediction for all next layer capsules
-        all_final_caps = self.dense_caps_layer(primary_caps_flat)
+        # # for each capsule in primary layer compute prediction for all next layer capsules
+        # all_final_caps = self.dense_caps_layer(primary_caps_flat)
+        #
+        # # compute digit capsules
+        # # final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.bias, softmax_dim=self.softmax_dim)
+        # final_caps, stats = self.dynamic_routing(all_final_caps, self.routing_iters)
 
-        # compute digit capsules
-        # final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.bias, softmax_dim=self.softmax_dim)
-        final_caps, mask_rato = self.dynamic_routing(all_final_caps, self.routing_iters)
+
+        ### test extra layer
+        all_caps1 = self.dense_caps_layer1(primary_caps_flat)
+        caps1, _ = self.dynamic_routing1(all_caps1, self.routing_iters)
+        all_caps2 = self.dense_caps_layer2(caps1)
+        final_caps, stats2 = self.dynamic_routing2(all_caps2, self.routing_iters)
+
+        stats = stats2
 
         logits = self.compute_logits(final_caps)
 
         decoder_input = self.create_decoder_input(final_caps, t)
         recon = self.decoder(decoder_input)
 
-        return logits, recon, final_caps, mask_rato
+        return logits, recon, final_caps, stats
 
 
 class BaselineCNN(_Net):

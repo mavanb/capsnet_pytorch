@@ -1,5 +1,7 @@
 import torch
 import math
+import logging
+import sys
 
 
 def flex_profile(func):
@@ -62,5 +64,15 @@ def convert_grid_index_to_flat(tot_caps, tot_height, tot_width):
 
 def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def configure_logger(log_file, log_file_name):
+    if log_file:
+        logging.basicConfig(filename=log_file_name, level=logging.INFO)
+        logger = logging.getLogger(__name__)
+        logger.addHandler(logging.StreamHandler())
+    else:
+        logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
 
 

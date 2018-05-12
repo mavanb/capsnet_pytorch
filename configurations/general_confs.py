@@ -1,6 +1,41 @@
 import configargparse
 import torch.cuda
-from configurations.config_utils import parse_bool
+
+
+def parse_bool(v):
+    """ Bool type to set in add in parser.add_argument to fix not parsing of False. See:
+    https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+    """
+    import configargparse
+    if v.lower().strip() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower().strip() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise configargparse.ArgumentTypeError('Boolean value expected.')
+
+
+def get_conf(custom_args=lambda x: x):
+    import configargparse
+    import configurations.general_confs
+
+    parser = configargparse.get_argument_parser()
+
+    # set module config
+    parser = custom_args(parser)
+
+    try:
+        conf = parser.parse_args()
+    except:
+        print(parser.format_help())
+        raise ValueError("Could not parse config.")
+
+    # combined configs
+    conf.model_checkpoint_path = "{}/{}{}".format(conf.trained_model_path, conf.model_name,
+                                                  "_debug" if conf.debug else "")
+    conf.model_load_path = "{}/{}".format(conf.trained_model_path, conf.load_name)
+
+    return conf, parser
 
 
 p = configargparse.get_argument_parser()
@@ -33,7 +68,7 @@ p.add_argument('--n_saved', type=int, required=True, help='Models are save every
 p.add_argument('--plot_train_progress', type=parse_bool, required=True, help='Plot train progress in visdom')
 p.add_argument('--plot_eval_acc', type=parse_bool, required=True, help='Plot acc of validation in visdom')
 p.add_argument('--early_stop', type=parse_bool, required=True, help='Early stopping on validation loss')
-
+p.add_argument('--cudnn_benchmark', type=parse_bool, required=True, help='Bool for cudnn benchmarking. Faster for large')
 
 
 

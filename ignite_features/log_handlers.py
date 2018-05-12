@@ -2,8 +2,7 @@ from abc import abstractmethod
 
 
 class LogMetricHandler:
-    def __init__(self, logger, message, metric_name, log_every=1):
-        self.logger = logger
+    def __init__(self, message, metric_name, log_every=1):
         self.log_every = log_every
         self.message = message
         self.metric_name = metric_name
@@ -13,7 +12,7 @@ class LogMetricHandler:
             f"Engine state does not contain the metric {self.metric_name}"
         should_log, output = self.get_output(engine)
         if should_log:
-            self.logger(self.message.format(output))
+            print(self.message.format(output))
 
     @abstractmethod
     def get_output(self, engine):
@@ -32,9 +31,6 @@ class LogEpochMetricHandler(LogMetricHandler):
 
 
 class LogTrainProgressHandler:
-    def __init__(self, logger):
-        self.logger = logger
-
     def __call__(self, engine):
         # -1 and +1 because counting from 1, to make sure it prints 1/X and X/X
         iteration_in_epoch = ((engine.state.iteration - 1) % len(engine.state.dataloader)) + 1
@@ -45,9 +41,9 @@ class LogTrainProgressHandler:
         # new line before new iteration
         start = "\n" if iteration_in_epoch == 1 else ""
 
-        self.logger(f"\r{start}Epoch[{engine.state.epoch}/{engine.state.max_epochs}] "
+        print(f"\r{start}Epoch[{engine.state.epoch}/{engine.state.max_epochs}] "
                     f"Iteration[{iteration_in_epoch}/{len(engine.state.dataloader)}] "
-                    f"Acc: {engine.state.metrics['batch_acc']:.2f} "
-                    f"Loss: {engine.state.metrics['batch_loss']:.2f}", end=end)
+                    f"Acc: {engine.state.metrics['batch_acc']:.3f} "
+                    f"Loss: {engine.state.metrics['batch_loss']:.3f}", end=end)
 
 
