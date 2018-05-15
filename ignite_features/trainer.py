@@ -11,8 +11,7 @@ from ignite.engines.engine import Events, Engine
 from ignite_features.metric import ValueMetric, ValueIterMetric, TimeMetric
 from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
 from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
-from utils import get_device, flex_profile
-import logging
+from utils import get_device, flex_profile, get_logger
 import time
 
 
@@ -56,12 +55,12 @@ class Trainer:
         self.conf = conf
         self.device = get_device()
 
-        self._log = logging.getLogger(__name__ + "." + self.__class__.__name__)
+        self._log = get_logger(__name__)
         
         # init visdom
         self.vis = visdom.Visdom()
         if not self.vis.check_connection():
-            raise RuntimeError("Visdom server not running.")
+            raise RuntimeError("Visdom server not running. Start using: python -m visdom.server")
 
         if conf.seed:
             torch.manual_seed(conf.seed)
@@ -205,7 +204,7 @@ class CapsuleTrainer(Trainer):
             labels = batch[1].to(trainer.device)
 
             class_probs, reconstruction, _, _ = trainer.model(data)
-            total_loss, _, _ = trainer.capsule_loss(data, labels, class_probs, reconstruction)
+            total_loss, _, _ = trainer.loss(data, labels, class_probs, reconstruction)
 
             acc = trainer.model.compute_acc(class_probs, labels)
 

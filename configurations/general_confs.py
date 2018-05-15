@@ -40,13 +40,14 @@ def get_conf(custom_args=lambda x: x):
 
 p = configargparse.get_argument_parser()
 
+
 # add configurations file
 if torch.cuda.is_available():
-    p.add('--general_config', is_config_file=True, default="configurations/general_cuda.conf",
+    p.add('--general_config', is_config_file=True, default="./configurations/general_cuda.conf",
           help='configurations file path')
 else:
     # config file for local / non-cuda run
-    p.add('--general_config', is_config_file=True, default="configurations/general_local.conf",
+    p.add('--general_config', is_config_file=True, default="./configurations/general_local.conf",
           help='configurations file path')
 
 # required arguments: specified in configurations file or in

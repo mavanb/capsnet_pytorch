@@ -1,5 +1,4 @@
 import numpy as np
-import logging
 import visdom
 from abc import abstractmethod
 
@@ -8,8 +7,6 @@ class VisPlotter:
 
     def __init__(self, engine, vis, metric_name, xlabel, ylabel, title, plot_every):
         assert isinstance(vis, visdom.Visdom), "Argument engine should be an instance of Engine"
-        self._logger = logging.getLogger(__name__ + "." + self.__class__.__name__)
-        self._logger.addHandler(logging.NullHandler())
         self.vis = vis
         self.metric_name = metric_name
         self.plot_every = plot_every

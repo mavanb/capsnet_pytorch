@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-import logging
-
 import torch
 from torch.nn.modules.loss import NLLLoss
 from torchvision import transforms
@@ -10,9 +8,7 @@ from configurations.general_confs import get_conf
 from data.data_loader import get_dataset
 from ignite_features.trainer import CNNTrainer
 from nets import BaselineCNN
-from utils import configure_logger
-
-log = logging.getLogger(__name__)
+from utils import get_logger
 
 
 def custom_args(parser):
@@ -27,7 +23,7 @@ def custom_args(parser):
 def main():
 
     conf, parser = get_conf(custom_args)
-    configure_logger(conf.log_file, conf.log_file_name)
+    log = get_logger(__name__)
     log.info(parser.format_values())
 
     transform = transforms.ToTensor()

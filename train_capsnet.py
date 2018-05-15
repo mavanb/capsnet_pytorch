@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-import logging
-
 import torch
 from torchvision import transforms
 
@@ -10,10 +8,7 @@ from data.data_loader import get_dataset
 from ignite_features.trainer import CapsuleTrainer
 from loss import CapsuleLoss
 from nets import BasicCapsNet
-from utils import configure_logger
-
-log = logging.getLogger(__name__)
-
+from utils import get_logger
 
 def custom_args(parser):
     parser.add('--basic_capsnet_config', is_config_file=True, default="configurations/basic_capsnet.conf",
@@ -42,8 +37,9 @@ def custom_args(parser):
 
 def main():
     conf, parser = get_conf(custom_args)
-    configure_logger(conf.log_file, conf.log_file_name)
+    log = get_logger(__name__)
     log.info(parser.format_values())
+
 
     transform = transforms.ToTensor()
     dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)

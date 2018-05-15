@@ -66,13 +66,15 @@ def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def configure_logger(log_file, log_file_name):
-    if log_file:
-        logging.basicConfig(filename=log_file_name, level=logging.INFO)
-        logger = logging.getLogger(__name__)
-        logger.addHandler(logging.StreamHandler())
-    else:
-        logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+def get_logger(name):
+        logger = logging.getLogger(name)
+        handler = logging.StreamHandler(sys.stdout)
+        # formatter = logging.Formatter(
+        #     '%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+        # handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        return logger
 
 
 
