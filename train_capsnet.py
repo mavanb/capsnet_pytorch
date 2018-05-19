@@ -10,6 +10,7 @@ from loss import CapsuleLoss
 from nets import BasicCapsNet
 from utils import get_logger
 
+
 def custom_args(parser):
     parser.add('--basic_capsnet_config', is_config_file=True, default="configurations/basic_capsnet.conf",
                help='configurations file path')
@@ -39,8 +40,6 @@ def main():
     conf, parser = get_conf(custom_args)
     log = get_logger(__name__)
     log.info(parser.format_values())
-
-
     transform = transforms.ToTensor()
     dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 

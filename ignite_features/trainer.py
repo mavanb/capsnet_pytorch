@@ -60,7 +60,20 @@ class Trainer:
         # init visdom
         self.vis = visdom.Visdom()
         if not self.vis.check_connection():
-            raise RuntimeError("Visdom server not running. Start using: python -m visdom.server")
+            self._log.info("No visdom connection found. Starting visdom.")
+            import subprocess
+            import sys
+            subprocess.Popen([f"{sys.executable}", "-m", "visdom.server", "-logging_level", "50"])
+
+            retries = 0
+            while (not self.vis.check_connection()) and retries < 10:
+                retries += 1
+                time.sleep(1)
+
+            if self.vis.check_connection():
+                self._log.info("Succesfully started Visdom.")
+            else:
+                raise RuntimeError("Could not start Visom")
 
         if conf.seed:
             torch.manual_seed(conf.seed)

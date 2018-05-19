@@ -16,7 +16,7 @@ class _Net(nn.Module):
 
     @staticmethod
     def compute_predictions(logits):
-        """Compute predictions by selecting
+        """Compute predictions b    y selecting
         :param logits: [batch_size, num_classes/capsules]
         :returns [batch_size]
         """

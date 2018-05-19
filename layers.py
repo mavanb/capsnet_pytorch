@@ -58,15 +58,8 @@ class DynamicRouting(nn.Module):
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
                                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze()
 
-                ## Found very strange mean in my code, this takes an average off the b_ij update over the batch, which
-                ## does not make sense to me. Maybe it is their because other repo inplement the above rule as product
-                ## and then sum. I did found same error in other capsule net repo. Strange error, because I checked
-                ## every line 1000 times.
-                # b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
-                #                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze().mean(dim=0, keepdim=True)
-
                 # sparsify before last itter
-                if index < (iters - 2) and self.sparsify:  # skip update last iter
+                if index < (iters - 2) and self.sparsify:  #todo: make sure only to sparsify at last iteration
                     # todo include activaton
                     # activation = _CapsNet.compute_logits(v_vec)
                     #
@@ -91,6 +84,9 @@ class DynamicRouting(nn.Module):
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
         return v_vec, routing_stats
+
+    def _sparsify(self):
+        """ Sparsifies b_vec"""
 
 
 class LinearPrimaryLayer(nn.Module):

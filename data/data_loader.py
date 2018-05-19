@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
-from torchvision.datasets import MNIST, CIFAR10, SmallNORB
+from torchvision.datasets import MNIST, CIFAR10, SmallNORB, FashionMNIST
 from torchvision.transforms import Compose, Resize, RandomCrop, ToTensor, ColorJitter, Normalize
 
 
@@ -81,13 +81,16 @@ def get_dataset(dataset_name, transform=ToTensor(), train=True):
     elif dataset_name == "smallnorb":
         transform = Compose([
             Resize(48),
-            # ColorJitter(brightness=0.247, contrast=0.8),  #convert brightness 	63/255=0.247
+            ColorJitter(brightness=0.247, contrast=0.8),  #convert brightness 	63/255=0.247
             RandomCrop(32),
             ToTensor(),
             Normalize([0], [1])
         ])
         dataset = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=train, mode="all")
         labels = 5
+    elif dataset_name == "fashionmnist":
+        dataset = FashionMNIST(download=True, root="./data/fashionmnist", transform=transform, train=train)
+        labels = 10
     else:
         raise ValueError("Name dataset does not exists.")
     return dataset, dataset[0][0].shape, labels
