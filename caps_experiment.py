@@ -13,7 +13,29 @@ from data.data_loader import get_dataset
 from ignite_features.trainer import CapsuleTrainer
 from loss import CapsuleLoss
 from utils import get_logger
-from train_capsnet import custom_args
+
+
+def custom_args(parser):
+    parser.add('--exp_capsnet_config', is_config_file=True, default="configurations/exp_capsnet.conf",
+               help='configurations file path')
+    parser.add_argument('--model_name', type=str, required=True, help='Name of the model.')
+    parser.add_argument('--alpha', type=float, required=True, help="Alpha of CapsuleLoss")
+    parser.add_argument('--m_plus', type=float, required=True, help="m_plus of margin loss")
+    parser.add_argument('--m_min', type=float, required=True, help="m_min of margin loss")
+    parser.add_argument('--prim_caps', type=int, required=True, help="Number of primary capsules")
+    parser.add_argument('--routing_iters', type=int, required=True,
+                        help="Number of iterations in the routing algo.")
+    parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
+    parser.add_argument('--squash_dim', type=int, required=True, help="")
+    parser.add_argument('--softmax_dim', type=int, required=True, help="")
+    parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
+    parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
+    parser.add_argument('--excessive_testing', type=parse_bool, required=True,
+                        help="Do excessive tests on test set")
+    parser.add_argument('--sparse_threshold', type=float, required=True, help="Threshold of routing to sparsify.")
+    parser.add_argument('--sparsify', type=str, required=True, help="The method used to sparsify the parse tree.")
+    parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")
+    return parser
 
 
 class DoubleCapsNet(_CapsNet):
@@ -39,22 +61,22 @@ class DoubleCapsNet(_CapsNet):
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
 
-        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=100,
+        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=10,
                                                    vec_len_in=vec_len_prim, vec_len_out=12, routing_iters=routing_iters,
                                                    stdev=stdev_W)
 
-        self.dynamic_routing1 = DynamicRouting(j=100, i=in_features_dense_layer, n=12, softmax_dim=softmax_dim,
+        self.dynamic_routing1 = DynamicRouting(j=10, i=in_features_dense_layer, n=12, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify)
+                                               sparsify=sparsify, sparse_topk=sparse_topk)
 
-        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=100, out_capsules=digit_caps,
+        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=10, out_capsules=digit_caps,
                                                    vec_len_in=12, vec_len_out=vec_len_digit,
                                                    routing_iters=routing_iters,
                                                    stdev=stdev_W)
 
-        self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=100, n=vec_len_digit, softmax_dim=softmax_dim,
+        self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=10, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=False)
+                                               sparsify=False, sparse_topk=sparse_topk)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
@@ -182,7 +204,7 @@ def main():
     transform = transforms.ToTensor()
     dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 
-    model = TripleCapsNet(in_channels=data_shape[0], digit_caps=label_shape, vec_len_prim=8, vec_len_digit=16,
+    model = DoubleCapsNet(in_channels=data_shape[0], digit_caps=label_shape, vec_len_prim=8, vec_len_digit=16,
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
                          in_width=data_shape[2], softmax_dim=conf.softmax_dim, squash_dim=conf.squash_dim,
                          stdev_W=conf.stdev_W, bias_routing=conf.bias_routing, sparse_threshold=conf.sparse_threshold,

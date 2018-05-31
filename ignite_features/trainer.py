@@ -223,7 +223,7 @@ class CapsuleTrainer(Trainer):
 
     def _add_custom_events(self):
 
-        if self.conf.sparsify is "nodes_threshold":
+        if self.conf.sparsify == "nodes_threshold":
             ValueEpochMetric(lambda x: x["rout_stats"]["mask_rato"]).attach(self.train_engine, "mask_rato_epoch")
 
             # plot per epoch
@@ -255,31 +255,30 @@ class CapsuleTrainer(Trainer):
                                                 VisIterPlotter(self.train_engine, self.vis, "avg_neg_devs_iter", "Ratio"
                                                                , "Avg neg devs per iteration"))
 
-        if self.conf.sparsify is "edges_threshold":
+        if self.conf.sparsify == "edges_threshold":
             pass
-        if self.conf.sparsify is "edges_topk":
+        if self.conf.sparsify == "edges_topk":
             pass
 
         # Add entropy metric and plots for each routing iter
-        for i in range(self.conf.routing_iters):
+        # skip first routing iter, because entropy uniform anyways
+        for i in range(1, self.conf.routing_iters):
 
-            # skip first routing iter, because entropy uniform anyways
-            if i > 0:
-                # callable to get entropy of routing iter
-                get_h = lambda x: x["rout_stats"]["H_c_vec"][i]
+            # callable to get entropy of routing iter
+            get_h = lambda x: x["rout_stats"]["H_c_vec"][i]
 
-                ValueEpochMetric(get_h).attach(self.train_engine, f"h_rout_{i}")
-                self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.train_engine, self.vis,
-                                        f"h_rout_{i}", "H", f"Train entropy {i}"))
+            ValueEpochMetric(get_h).attach(self.train_engine, f"h_rout_{i}")
+            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.train_engine, self.vis,
+                                                                                        f"h_rout_{i}", "H", f"Train entropy {i}"))
 
-                ValueEpochMetric(get_h).attach(self.eval_engine, f"h_rout_{i}")
-                self.eval_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.eval_engine, self.vis,
-                                                    f"h_rout_{i}", "H", f"Valid entropy {i}"))
+            ValueEpochMetric(get_h).attach(self.eval_engine, f"h_rout_{i}")
+            self.eval_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.eval_engine, self.vis,
+                                                                                       f"h_rout_{i}", "H", f"Valid entropy {i}"))
 
         if self.conf.print_time:
             TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.train_engine, self.vis,
-                                                                                "time", "Time in s", "Time per sample"))
+                                                                                        "time", "Time in s", "Time per sample"))
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
                 'Time per example: {:.4f} sec', "time"))
 

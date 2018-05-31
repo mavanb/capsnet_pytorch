@@ -76,7 +76,7 @@ class DynamicRouting(nn.Module):
                     b_vec, routing_stats = self.sparsify_edges_topk(b_vec, index, iters, routing_stats)
 
             else:
-                if self.sparsify is "nodes_threshold":
+                if self.sparsify == "nodes_threshold":
                     v_vec = v_vec_tune(v_vec)
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
@@ -213,10 +213,15 @@ class DynamicRouting(nn.Module):
             mask_rato = len(b_vec[b_vec == float("-inf")]) / (self.j * b * self.i)
 
             routing_stats["mask_rato"] = mask_rato
-            routing_stats["avg_neg_deviations"] = avg_neg_deviations.item()
+            routing_stats["avg_neg_devs"] = avg_neg_deviations.item()
             routing_stats["max_neg_devs"] = max_neg_deviations.item()
 
-            return b_vec, routing_stats, lambda v_vec: v_vec[delete_values, :, :]
+            def callback(v_vec):
+                if iters > 0:
+                    v_vec[delete_values, :] = 0
+                return v_vec
+
+            return b_vec, routing_stats, callback
         else:
             return b_vec, routing_stats, None
 
