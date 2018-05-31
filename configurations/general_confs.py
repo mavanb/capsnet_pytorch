@@ -66,8 +66,6 @@ p.add_argument("--drop_last", type=parse_bool, required=True, help="drop last in
 p.add_argument('--shuffle', type=parse_bool, required=True, help='Shuffle dataset')
 p.add_argument('--n_saved', type=int, required=True, help='Models are save every epoch. N_saved is length of this '
                                                           'history')
-p.add_argument('--plot_train_progress', type=parse_bool, required=True, help='Plot train progress in visdom')
-p.add_argument('--plot_eval_acc', type=parse_bool, required=True, help='Plot acc of validation in visdom')
 p.add_argument('--early_stop', type=parse_bool, required=True, help='Early stopping on validation loss')
 p.add_argument('--cudnn_benchmark', type=parse_bool, required=True, help='Bool for cudnn benchmarking. Faster for large')
 

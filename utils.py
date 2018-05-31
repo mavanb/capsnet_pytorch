@@ -38,6 +38,40 @@ def squash(tensor, dim=-1):
     return scale * tensor / torch.sqrt(squared_norm + 1e-7)
 
 
+def calc_entropy(input_tensor, dim):
+    """ Calculate entropy over dimension of tensor. The sum over this dimension should thus always sum to one.
+
+    Args:
+        input_tensor: (tensor) Input tensor.
+        dim: Dimension over which the entropy is calculated. All entries over this dimension should sum to 1.
+
+    Returns:
+    """
+    # check if dimension makes sense
+    assert dim < len(input_tensor.shape), "Dimension {} does not exists".format(dim)
+
+    # slice should represent a probablity distribution, thus sum to one
+    assert (get_approx_value(input_tensor.sum(dim=dim), 1) == False).nonzero().shape == torch.Size([0]), "Dimension {} " \
+        "does not sum to 1 everywhere".format(dim)
+
+    # return entropy: H(p(x)) = sum_i p(x=i) log(1/p(x=i))
+    return (input_tensor * (1/(input_tensor+1e-8)).log2()).sum(dim=dim)
+
+
+def get_approx_value(input_tensor, value, precision=1e6):
+    """ Get all entries that equal a certain value approximately.
+
+    Args:
+        input_tensor: (tensor) tensor to compare against of any size
+        value: (float) value to compare to
+        precision: (float) precision of comparision
+
+    Returns: (tensor) bool tensor of same size as input indication which entries are approx equal
+
+    """
+    return (input_tensor * precision).round() == value * precision
+
+
 def one_hot(labels, depth):
     """ Create one-hot encoding matrix from vector of labels/indices.
     :param labels: 1D-tensor or 1D-Variable
@@ -75,6 +109,30 @@ def get_logger(name):
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
         return logger
+
+
+def batched_index_select(input, dim, index):
+    """ Select indices batch_wise.
+    Resources:
+
+    https://discuss.pytorch.org/t/batched-index-select/9115/8
+    https://stackoverflow.com/questions/49104307/indexing-on-axis-by-list-in-pytorch
+
+    Args:
+        input: (tensor) input tensor of size: batch x .. x N x ..
+        dim: (int) dimension of the indices
+        index: (tensor) the tensor with the indices of size: batch x M
+
+    Returns: (tensor) selected tensor of size: batch x .. x M x ..
+
+    """
+    views = [input.shape[0]] + \
+        [1 if i != dim else -1 for i in range(1, len(input.shape))]
+    expanse = list(input.shape)
+    expanse[0] = -1
+    expanse[dim] = -1
+    index = index.view(views).expand(expanse)
+    return torch.gather(input, dim, index)
 
 
 

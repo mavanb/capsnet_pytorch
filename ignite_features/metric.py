@@ -14,7 +14,7 @@ class IterMetric(Metric):
         engine.add_event_handler(Events.ITERATION_COMPLETED, self.completed, name)
 
 
-class ValueMetric(Metric):
+class ValueEpochMetric(Metric):
     """
     Calculates the average of some value that must be average of the number of batches per epoch.
     """
@@ -33,7 +33,7 @@ class ValueMetric(Metric):
         return self._sum / self._num_examples
 
 
-class ValueIterMetric(ValueMetric, IterMetric):
+class ValueIterMetric(ValueEpochMetric, IterMetric):
     """ ValueMetric with is computed and reset at every iteration instead of epoch."""
     pass
 

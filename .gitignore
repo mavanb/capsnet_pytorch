@@ -6,6 +6,7 @@ logs/**
 data/mnist/**
 data/cifar10/**
 data/smallnorb/**
+data/fashionmnist/**
 capsule_example/**
 
 sandbox/

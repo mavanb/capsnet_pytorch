@@ -28,11 +28,9 @@ def custom_args(parser):
     parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
     parser.add_argument('--excessive_testing', type=parse_bool, required=True,
                         help="Do excessive tests on test set")
-    parser.add_argument('--plot_mask_rato', type=parse_bool, required=True, help="Plot mask rato")
-    parser.add_argument('--plot_deviations', type=parse_bool, required=True, help="Plot deviations")
     parser.add_argument('--sparse_threshold', type=float, required=True, help="Threshold of routing to sparsify.")
-    parser.add_argument('--sparsify', type=parse_bool, required=True, help="Whether or not to sparsify parse tree.")
-
+    parser.add_argument('--sparsify', type=str, required=True, help="The method used to sparsify the parse tree.")
+    parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")
     return parser
 
 
@@ -47,7 +45,7 @@ def main():
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
                          in_width=data_shape[2], softmax_dim=conf.softmax_dim, squash_dim=conf.squash_dim,
                          stdev_W=conf.stdev_W, bias_routing=conf.bias_routing, sparse_threshold=conf.sparse_threshold,
-                         sparsify=conf.sparsify)
+                         sparsify=conf.sparsify, sparse_topk=conf.sparse_topk)
 
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape)
 

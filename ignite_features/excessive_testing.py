@@ -36,6 +36,10 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
     device = get_device()
 
     def test_routing_iters(engine, model):
+
+        # set sparsify in model to false, else max diff is compared to zerod entries
+        model.set_sparsify("None")
+
         with torch.no_grad():
 
             num_batches = len(test_loader)
@@ -52,7 +56,7 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
 
                 for routing_iter in range(routing_test_iters):
                     model.routing_iters = routing_iter + 1
-                    class_logits, _, _, _ = model(data)
+                    class_logits, recon, final_caps, stats = model(data)
                     acc = model.compute_acc(class_logits, labels)
 
                     acc_values[batch_idx, routing_iter] = acc
@@ -77,6 +81,8 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
             vis.line(X=np.column_stack((epoch, epoch, epoch)), Y=np.column_stack(acc_mean), update="append",
                      win=win_acc, opts={"legend": value_legend})
 
+        # set sparsify back to configuration
+        model.set_sparsify(conf.sparsify)
     return test_routing_iters
 
 

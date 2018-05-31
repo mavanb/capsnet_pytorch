@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from utils import squash, init_weights, flex_profile, get_device
+from utils import squash, init_weights, flex_profile, get_device, calc_entropy, batched_index_select
 
 
 class DynamicRouting(nn.Module):
 
-    def __init__(self, j, i, n, softmax_dim, bias_routing, sparse_threshold, sparsify):
+    def __init__(self, j, i, n, softmax_dim, bias_routing, sparse_threshold, sparsify, sparse_topk):
         super().__init__()
         self.soft_max = torch.nn.Softmax(dim=softmax_dim)
         self.j = j
@@ -26,21 +26,29 @@ class DynamicRouting(nn.Module):
         # that can be implemented to enable analysis at end of each routing iter
         self.log_function = None
         self.sparse_threshold = sparse_threshold
+        self.sparse_topk = [float(i) for i in sparse_topk.split(";")]
         self.sparsify = sparsify
 
     @flex_profile
     def forward(self, u_hat, iters):
 
         b = u_hat.shape[0]
-        routing_stats = {"mask_rato": 0.0, "avg_neg_devs": 0.0, "max_neg_devs":0.0}
+        routing_stats = {}
 
         if self.b_vec is None:
             self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(),  requires_grad=False)
         b_vec = self.b_vec
 
+        # track entropy of b_vec per iter
+        routing_stats["H_c_vec"] = {}
+
         for index in range(iters):
-            # softmax of i, weight of all predictions should sum to 1, note in tf code this does not give an error
+
+            # softmax over j, weight of all predictions should sum to 1
             c_vec = self.soft_max(b_vec)
+
+            # compute entropy of weight distribution of all capsules
+            routing_stats["H_c_vec"][index] = calc_entropy(c_vec, dim=1).mean().item()
 
             # in einsum: bij, bjin-> bjn
             # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
@@ -58,35 +66,159 @@ class DynamicRouting(nn.Module):
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
                                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze()
 
-                # sparsify before last itter
-                if index < (iters - 2) and self.sparsify:  #todo: make sure only to sparsify at last iteration
-                    # todo include activaton
-                    # activation = _CapsNet.compute_logits(v_vec)
-                    #
-                    avg_b_j = b_vec.sum(dim=2) / self.i
+                if self.sparsify == "nodes_threshold":
+                    b_vec, routing_stats, v_vec_tune = self.sparsify_nodes_threshold(b_vec, index, iters, routing_stats)
+                elif self.sparsify == "nodes_topk":
+                    b_vec, routing_stats = self.sparsify_nodes_topk(b_vec, index, iters, routing_stats)
+                elif self.sparsify == "edges_threshold":
+                    b_vec, routing_stats = self.sparsify_edges_threshold(b_vec, index, iters)
+                elif self.sparsify == "edges_topk":
+                    b_vec, routing_stats = self.sparsify_edges_topk(b_vec, index, iters, routing_stats)
 
-                    means = (avg_b_j.sum(dim=1) / self.j).view(-1, 1)
-                    deviations = (avg_b_j - means)
-                    neg_deviations = deviations * (deviations < 0).float()
-                    avg_neg_deviations = neg_deviations.mean()
-                    max_neg_deviations = neg_deviations.min(dim=1)[0].mean(dim=0)
-
-                    a, _ = torch.max(avg_b_j, dim=1)
-                    exponent = avg_b_j - a.view(-1, 1)
-                    threshold = torch.tensor(self.sparse_threshold, device=get_device()).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
-                    keep_values = (avg_b_j > threshold.view(-1, 1)).float()
-                    mask_rato = len(keep_values[keep_values==0]) / (self.j * b)
-                    b_vec = keep_values.view(-1, self.j, 1) * b_vec
-
-                    routing_stats["mask_rato"] = mask_rato
-                    routing_stats["avg_neg_devs"] = avg_neg_deviations.item()
-                    routing_stats["max_neg_devs"] = max_neg_deviations.item()
+            else:
+                if self.sparsify is "nodes_threshold":
+                    v_vec = v_vec_tune(v_vec)
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
         return v_vec, routing_stats
 
-    def _sparsify(self):
-        """ Sparsifies b_vec"""
+    def sparsify_nodes_topk(self, b_vec, index, iters, routing_stats):
+        # incoming weight of parent capsule (average over childs)
+        # z_j = b_vec.sum(dim=2) / self.i
+        #
+        # # delete all incoming weight of parent j if smaller than lhs
+        # delete_values = (z_j < lhs.view(-1, 1))
+        # b_vec[delete_values, :] = float("-inf")
+        raise NotImplementedError
+
+    def sparsify_edges_topk(self, b_vec, index, iters, routing_stats, resolve_full_inf="no_mask"):
+
+        # reshape to allow top k over i and j dim
+        b_vec_flat = b_vec.view(-1, self.i * self.j)
+
+        assert len(self.sparse_topk) > index, "Please specify for each update routing iter the sparse top k. Example:" \
+                                              " routing iters: 3, sparse_topk = 0.4;0.4"
+        current_mask_rato = self.sparse_topk[index]
+
+        # number of elements to mask: mask rato times abs number
+        mask_count = int(current_mask_rato * self.j * self.i)
+
+        # mask_count of 0 means no sparsify, thus skip
+        if mask_count > 0:
+
+            # set all non top k to -inf, not trivial. topk returns an indices, which can't be used to index on b_vec (thus,
+            # b_vec[indices] does't work). Therefore, we take the kth value and use torch.ge to get the binary tensor, which
+            # can be used to index on. However, torch.kthvalue is does not work on cuda (https://github.com/pytorch/pytorch/
+            # issues/2134). Instead, we take the max of topk (is largest excluded value).
+            b = b_vec.shape[0]
+
+            # take bottomk smallest values
+            val, _ = torch.topk(b_vec_flat, mask_count, largest=False, sorted=False, dim=1)
+
+            # get largest smallest value
+            kthvalues, _ = torch.max(val, dim=1, keepdim=True)
+
+            # mask all equal or smaller than largest smallest value
+            mask = torch.le(b_vec_flat, kthvalues).view(-1, self.j, self.i)
+
+            # compute the entries that do not have only -inf on the j colums
+            # the entries with inf in b_vec if the mask is applied, | gives OR operator
+            inf_entries = mask | (b_vec == float("-inf"))
+
+            # entries where the full j col is -inf
+            # indices_non_full_inf_cols = (inf_entries.sum(dim=1) != self.j).view(b, 1, self.i)
+            full_inf = (inf_entries.sum(dim=1) == self.j).view(b, 1, self.i)
+
+            # resolve full inf columns by mask all but the largest value
+            if resolve_full_inf == "only_max":
+                # entries that have the max value in b_vec in column j
+                # max returns indices, to get bytetensor format use the values instead with eq comparision
+                maxvalues_b_vec = torch.eq(torch.max(b_vec, dim=1)[0].view(128, 1, 1152), b_vec)
+
+                # entries that should be used to correct the current mask, if 1 they not allowed to set to -inf
+                correcting_mask = full_inf & maxvalues_b_vec
+
+                # mask, but keep the largest value in column j if the whole column is -inf otherwise
+                valid_mask = mask & (correcting_mask^1)
+
+            # resolve full inf columns by not masking this column at all
+            elif resolve_full_inf == "no_mask":
+                # other mask method, don't apply mask on this col at all if causes full inf column
+                valid_mask = mask & (full_inf^1)
+            else:
+                raise ValueError("Method to resolve full infinite j column does not exits.")
+
+            # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
+            b_vec[valid_mask] = float("-inf")
+
+        return b_vec, routing_stats
+
+    def sparsify_edges_threshold(self, b_vec, index, iters):
+        raise NotImplementedError
+
+    def sparsify_nodes_threshold(self, b_vec, index, iters, routing_stats):
+        """ Sparsify the nodes of the parse tree using a threshold on the incoming weights of the nodes.
+        The threshold is compared against the incoming weights a node will have after taking the the
+        softmax. Sparsify only at the last iteration. The resulting zero rows in c_vec make rows in s_vec zero, which
+        result in small v_vec values. These are set to zero in the callback.
+
+        Args:
+            b_vec: (tensor) non-sparse current b_vec
+            index: (int) current routing iter
+            iters: (int) total routing iters
+
+        Returns: (tuple): tuple containing:
+                    arg1: (tensor) b_vec sparsified
+                    arg2: (dict) routing stats
+                    arg3: (tensor->tensor) callable to set v_vec completely to zero
+        """
+        # only sparsify on last update #todo: allow also on other iterations, avoid full j cols to be -inf though
+        if index == (iters - 2):
+
+            # incoming weight of parent capsule (average over childs)
+            z_j = b_vec.sum(dim=2) / self.i
+
+            # we set all rows to zero of which the average value gives a probability of less than the threshold after
+            # taking the softmax: e^z_j / (sum_k e^z_k) < threshold   (z_i = incoming weight of parent)
+            # gives: z_j < log(threshold) + log (sum_k e^z_k))
+
+            # compute left hand side with log sum exp trick
+            a, _ = torch.max(z_j, dim=1)
+            exponent = z_j - a.view(-1, 1)
+            lhs = torch.tensor(self.sparse_threshold, device=get_device()).log() + a + torch.log(
+                torch.exp(exponent).sum(dim=1))
+
+            # delete all incoming weight of parent j if smaller than lhs
+            delete_values = (z_j < lhs.view(-1, 1))
+            b_vec[delete_values, :] = float("-inf")
+
+            # Now, compute some routing statistics
+
+            # compute weights in c_vec space to allow comparision with the threshold
+            cz_j = nn.functional.softmax(z_j, dim=1)
+
+            # average incoming weight (average over parent)
+            cz_avg = (cz_j.sum(dim=1) / self.j).view(-1, 1)
+
+            # the deviation from the average per parent
+            deviation_cz_j = (cz_j - cz_avg)
+
+            # negative deviations
+            neg_deviations = deviation_cz_j * (deviation_cz_j < 0).float()
+            avg_neg_deviations = neg_deviations.mean()
+            max_neg_deviations = neg_deviations.min(dim=1)[0].mean(dim=0)
+
+            # average number of nodes masked
+            b = b_vec.shape[0]
+            mask_rato = len(b_vec[b_vec == float("-inf")]) / (self.j * b * self.i)
+
+            routing_stats["mask_rato"] = mask_rato
+            routing_stats["avg_neg_deviations"] = avg_neg_deviations.item()
+            routing_stats["max_neg_devs"] = max_neg_deviations.item()
+
+            return b_vec, routing_stats, lambda v_vec: v_vec[delete_values, :, :]
+        else:
+            return b_vec, routing_stats, None
 
 
 class LinearPrimaryLayer(nn.Module):
