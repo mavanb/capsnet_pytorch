@@ -59,7 +59,7 @@ class DynamicRouting(nn.Module):
                                              v_vec.view(b, self.j, 1, self.n, 1)).squeeze()
 
                 # sparsify before last itter
-                if index < (iters - 2) and self.sparsify:  #todo: make sure only to sparsify at last iteration
+                if index == (iters - 2) and self.sparsify:  #todo: make sure only to sparsify at last iteration
                     # todo include activaton
                     # activation = _CapsNet.compute_logits(v_vec)
                     #
@@ -74,13 +74,17 @@ class DynamicRouting(nn.Module):
                     a, _ = torch.max(avg_b_j, dim=1)
                     exponent = avg_b_j - a.view(-1, 1)
                     threshold = torch.tensor(self.sparse_threshold, device=get_device()).log() + a + torch.log(torch.exp(exponent).sum(dim=1))
-                    keep_values = (avg_b_j > threshold.view(-1, 1)).float()
-                    mask_rato = len(keep_values[keep_values==0]) / (self.j * b)
-                    b_vec = keep_values.view(-1, self.j, 1) * b_vec
+                    delete_values = (avg_b_j < threshold.view(-1, 1))
+                    mask_rato = len(delete_values[delete_values==0]) / (self.j * b)
+                    # b_vec = keep_values.view(-1, self.j, 1) * b_vec
+                    b_vec[delete_values, :] = float("-inf")
 
                     routing_stats["mask_rato"] = mask_rato
                     routing_stats["avg_neg_devs"] = avg_neg_deviations.item()
                     routing_stats["max_neg_devs"] = max_neg_deviations.item()
+            else:
+                if self.sparsify and iters > 1:
+                    v_vec[delete_values, :] = 0
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
         return v_vec, routing_stats

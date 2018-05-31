@@ -38,22 +38,22 @@ class DoubleCapsNet(_CapsNet):
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
 
-        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=14,
+        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=10,
                                                    vec_len_in=vec_len_prim, vec_len_out=12, routing_iters=routing_iters,
                                                    stdev=stdev_W)
 
-        self.dynamic_routing1 = DynamicRouting(j=14, i=in_features_dense_layer, n=12, softmax_dim=softmax_dim,
+        self.dynamic_routing1 = DynamicRouting(j=10, i=in_features_dense_layer, n=12, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
                                                sparsify=sparsify)
 
-        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=14, out_capsules=digit_caps,
+        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=10, out_capsules=digit_caps,
                                                    vec_len_in=12, vec_len_out=vec_len_digit,
                                                    routing_iters=routing_iters,
                                                    stdev=stdev_W)
 
-        self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=14, n=vec_len_digit, softmax_dim=softmax_dim,
+        self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=10, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify)
+                                               sparsify=False)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
@@ -71,11 +71,9 @@ class DoubleCapsNet(_CapsNet):
 
         ### test extra layer
         all_caps1 = self.dense_caps_layer1(primary_caps_flat)
-        caps1, _ = self.dynamic_routing1(all_caps1, self.routing_iters)
+        caps1, stats = self.dynamic_routing1(all_caps1, self.routing_iters)
         all_caps2 = self.dense_caps_layer2(caps1)
-        final_caps, stats2 = self.dynamic_routing2(all_caps2, self.routing_iters)
-
-        stats = stats2
+        final_caps, _ = self.dynamic_routing2(all_caps2, self.routing_iters)
 
         logits = self.compute_logits(final_caps)
 
