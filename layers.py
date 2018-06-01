@@ -29,7 +29,6 @@ class DynamicRouting(nn.Module):
         self.sparse_topk = [float(i) for i in sparse_topk.split(";")]
         self.sparsify = sparsify
 
-    @flex_profile
     def forward(self, u_hat, iters):
 
         b = u_hat.shape[0]
@@ -253,7 +252,6 @@ class Conv2dPrimaryLayer(nn.Module):
 
         self.squash_dim = squash_dim
 
-    @flex_profile
     def forward(self, input):
         """
         :param input: [b, c, h, w]
@@ -280,7 +278,6 @@ class DenseCapsuleLayer(nn.Module):
 
         self.W = nn.Parameter(stdev * torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
 
-    @flex_profile
     def forward(self, input):
         batch_size = input.shape[0]
         input_ = input.view(batch_size, 1, self.in_capsules, self.vector_len_in, 1)

@@ -5,9 +5,16 @@ import sys
 
 
 def flex_profile(func):
-    """ Decorator for the @proflile decorator of kernprof. Avoids having to remove it all the time. Profiled the effect
-     of this decorator itself: decorator is only called on function init. Note: do not use in frequently called nested
-    functions (in others words, if the function is instantiated very often."""
+    """ Decorator for the @proflile decorator of kernprof. Avoids having to remove it all the time.
+
+    To profile run: kernprof -v -l train_capsnet.py
+
+    Make sure to first put @profile (should be removed afterwards) or @flex_profile (no need to remove) decorators above
+    the functions you want to profile.
+
+    Note: I profilled the effect of this decorator itself: decorator is only called on function init. Thus, only do not
+    use in frequently called nested functions (in others words, if the function is instantiated very often.)
+    """
     try:
         func = profile(func)
     except NameError:

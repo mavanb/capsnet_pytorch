@@ -68,7 +68,7 @@ p.add_argument('--n_saved', type=int, required=True, help='Models are save every
                                                           'history')
 p.add_argument('--early_stop', type=parse_bool, required=True, help='Early stopping on validation loss')
 p.add_argument('--cudnn_benchmark', type=parse_bool, required=True, help='Bool for cudnn benchmarking. Faster for large')
-
+p.add_argument('--use_visdom', type=parse_bool, required=True, help='Makes plot in visdom yes/no. Slows startup time.')
 
 
 

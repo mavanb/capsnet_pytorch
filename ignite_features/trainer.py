@@ -47,6 +47,7 @@ class Trainer:
     :param conf: configuration obtained using config_utils.get_conf_logger
     """
 
+    @flex_profile
     def __init__(self, model, loss, optimizer, dataset, conf):
 
         self.model = model
@@ -58,22 +59,27 @@ class Trainer:
         self._log = get_logger(__name__)
         
         # init visdom
-        self.vis = visdom.Visdom()
-        if not self.vis.check_connection():
-            self._log.info("No visdom connection found. Starting visdom.")
-            import subprocess
-            import sys
-            subprocess.Popen([f"{sys.executable}", "-m", "visdom.server", "-logging_level", "50"])
+        if conf.use_visdom:
+            self.vis = visdom.Visdom()
+            if not self.vis.check_connection():
+                self._log.info("No visdom connection found. Starting visdom.")
+                import subprocess
+                import sys
+                subprocess.Popen([f"{sys.executable}", "-m", "visdom.server", "-logging_level", "50"])
 
-            retries = 0
-            while (not self.vis.check_connection()) and retries < 10:
-                retries += 1
-                time.sleep(1)
+                retries = 0
+                while (not self.vis.check_connection()) and retries < 10:
+                    retries += 1
+                    time.sleep(1)
 
-            if self.vis.check_connection():
-                self._log.info("Succesfully started Visdom.")
-            else:
-                raise RuntimeError("Could not start Visom")
+                if self.vis.check_connection():
+                    self._log.info("Succesfully started Visdom.")
+                else:
+                    raise RuntimeError("Could not start Visdom")
+        else:
+            # initializing visdom plots is slow.To avoid if statements for every added plot init vis as None
+            # and handle this within the VisPlotter class.
+            self.vis = None
 
         if conf.seed:
             torch.manual_seed(conf.seed)
@@ -184,7 +190,6 @@ class Trainer:
 
 class CapsuleTrainer(Trainer):
 
-    @flex_profile
     @staticmethod
     def _train_function(engine, trainer, batch):
         trainer.model.train()
@@ -221,6 +226,7 @@ class CapsuleTrainer(Trainer):
         return {"loss": total_loss.item(), "acc": acc, "epoch": trainer.model.epoch, "rout_stats":
             rout_stats}
 
+    @flex_profile
     def _add_custom_events(self):
 
         if self.conf.sparsify == "nodes_threshold":
@@ -289,7 +295,6 @@ class CapsuleTrainer(Trainer):
 
 class CNNTrainer(Trainer):
 
-    @flex_profile
     @staticmethod
     def _train_function(engine, trainer, batch):
         trainer.model.train()

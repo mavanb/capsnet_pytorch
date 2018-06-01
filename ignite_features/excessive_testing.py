@@ -97,7 +97,7 @@ def excessive_testing_handler(vis, conf, routing_test_iters):
     test_func_list = []
 
     # replace if multipe tests are implemented
-    if True:
+    if vis:
         test_func_list.append(test_routing_iters_handler(routing_test_iters, vis, test_loader, conf))
 
     def excessive_testing(engine, model):

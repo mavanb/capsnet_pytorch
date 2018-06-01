@@ -162,7 +162,6 @@ class BasicCapsNet(_CapsNet):
         """ Set sparsify. Can, for example, be used to turn sparsify off during inference."""
         self.dynamic_routing.sparsify = value
 
-    @flex_profile
     def forward(self, x, t=None):
         # apply conv layer
         conv1 = self.relu(self.conv1(x))
