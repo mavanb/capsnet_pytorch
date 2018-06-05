@@ -58,7 +58,18 @@ class _CapsNet(_Net):
         :param caps: capsules of shape [batch_size, num_capsules, dim_capsules]
         :returns logits of shape [batch_size, num_capsules]
         """
-        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False) + 1e-7)
+        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False))
+
+    @staticmethod
+    def compute_probs(logits):
+        """ Compute the class probabilities from the logits using the softmax
+
+        Args:
+            logits: (tensor) logits of final capsules of shape [batch_size, num_classes]
+
+        Returns: (tensor) the corresponding class probabilities of shape [batch_size, num_classes]
+        """
+        return F.softmax(logits, dim=1)
 
     def create_decoder_input(self, final_caps, labels=None):
         """ Construct decoder input based on class probs and final capsules.

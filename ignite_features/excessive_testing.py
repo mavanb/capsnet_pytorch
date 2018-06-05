@@ -18,20 +18,22 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
     value_legend = ["{} iter".format(i + 1) for i in range(routing_test_iters)]
     value_X_init = np.column_stack([0 for _ in value_names])
     value_Y_init = np.column_stack([np.nan for _ in value_names])
-    diff_names = [str(i + 1) for i in range(routing_test_iters -1)]
-    diff_legend = ["{}-{} diff".format(i+1, i+2) for i in range(routing_test_iters -1)]
-    diff_X_init = np.column_stack([0 for _ in diff_names])
-    diff_Y_init = np.column_stack([np.nan for _ in diff_names])
 
     win_acc = vis.line(X=value_X_init, Y=value_Y_init, name=value_names,
                                opts=dict(xlabel='Epoch', ylabel='acc', title='Accuracy on test set',
                                          legend=value_legend))
-    win_logits_max = vis.line(X=diff_X_init, Y=diff_Y_init, name=diff_names,
-                              opts=dict(xlabel='Epoch', ylabel='max diff', title='Relative maximum logit difference.',
-                                        legend=diff_legend))
-    win_logits_mean = vis.line(X=diff_X_init, Y=diff_Y_init, name=diff_names,
-                               opts=dict(xlabel='Epoch', ylabel='mean diff', title='Relative mean logit difference.',
-                                         legend=diff_legend))
+
+    # diff_names = [str(i + 1) for i in range(routing_test_iters -1)]
+    # diff_legend = ["{}-{} diff".format(i+1, i+2) for i in range(routing_test_iters -1)]
+    # diff_X_init = np.column_stack([0 for _ in diff_names])
+    # diff_Y_init = np.column_stack([np.nan for _ in diff_names])
+
+    # win_logits_max = vis.line(X=diff_X_init, Y=diff_Y_init, name=diff_names,
+    #                           opts=dict(xlabel='Epoch', ylabel='max diff', title='Relative maximum logit difference.',
+    #                                     legend=diff_legend))
+    # win_logits_mean = vis.line(X=diff_X_init, Y=diff_Y_init, name=diff_names,
+    #                            opts=dict(xlabel='Epoch', ylabel='mean diff', title='Relative mean logit difference.',
+    #                                      legend=diff_legend))
 
     device = get_device()
 
@@ -74,10 +76,10 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
             max_diff = logits_max_rel_diff.max(axis=0)
             acc_mean = acc_values.mean(axis=0)
             epoch = engine.state.epoch
-            vis.line(X=np.column_stack((epoch, epoch)), Y=np.column_stack(max_diff), update="append",
-                     win=win_logits_max, opts={"legend": diff_legend})
-            vis.line(X=np.column_stack((epoch, epoch)), Y=np.column_stack(mean_diff), update="append",
-                     win=win_logits_mean, opts={"legend": diff_legend})
+            # vis.line(X=np.column_stack((epoch, epoch)), Y=np.column_stack(max_diff), update="append",
+            #          win=win_logits_max, opts={"legend": diff_legend})
+            # vis.line(X=np.column_stack((epoch, epoch)), Y=np.column_stack(mean_diff), update="append",
+            #          win=win_logits_mean, opts={"legend": diff_legend})
             vis.line(X=np.column_stack((epoch, epoch, epoch)), Y=np.column_stack(acc_mean), update="append",
                      win=win_acc, opts={"legend": value_legend})
 
@@ -90,15 +92,14 @@ def excessive_testing_handler(vis, conf, routing_test_iters):
     """ Excessive testing handler. Add all tests that have to be performed to the test_func_list. """
 
     transform = transforms.ToTensor()
-    dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform, train=False)
+    dataset, _, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
     kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
     test_loader = torch.utils.data.DataLoader(dataset, batch_size=conf.batch_size, drop_last=True, **kwargs)
 
     test_func_list = []
 
     # replace if multipe tests are implemented
-    if vis:
-        test_func_list.append(test_routing_iters_handler(routing_test_iters, vis, test_loader, conf))
+    test_func_list.append(test_routing_iters_handler(routing_test_iters, vis, test_loader, conf))
 
     def excessive_testing(engine, model):
         for f in test_func_list:

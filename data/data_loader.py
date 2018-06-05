@@ -71,12 +71,14 @@ def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffl
     return train_loader, valid_loader
 
 
-def get_dataset(dataset_name, transform=ToTensor(), train=True):
+def get_dataset(dataset_name, transform=ToTensor()):
     if dataset_name == "mnist":
-        dataset = MNIST(download=True, root="./data/mnist", transform=transform, train=train)
+        data_train = MNIST(download=True, root="./data/mnist", transform=transform, train=True)
+        data_test = MNIST(download=True, root="./data/mnist", transform=transform, train=False)
         labels = 10
     elif dataset_name == "cifar10":
-        dataset = CIFAR10(download=True, root="./data/cifar10", transform=transform, train=train)
+        data_train = CIFAR10(download=True, root="./data/cifar10", transform=transform, train=True)
+        data_test = CIFAR10(download=True, root="./data/cifar10", transform=transform, train=False)
         labels = 10
     elif dataset_name == "smallnorb":
         transform = Compose([
@@ -86,14 +88,21 @@ def get_dataset(dataset_name, transform=ToTensor(), train=True):
             ToTensor(),
             Normalize([0], [1])
         ])
-        dataset = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=train, mode="all")
+        data_train = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=True, mode="all")
+        data_test = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=False, mode="all")
         labels = 5
     elif dataset_name == "fashionmnist":
-        dataset = FashionMNIST(download=True, root="./data/fashionmnist", transform=transform, train=train)
+        data_train = FashionMNIST(download=True, root="./data/fashionmnist", transform=transform, train=True)
+        data_test = FashionMNIST(download=True, root="./data/fashionmnist", transform=transform, train=False)
         labels = 10
     else:
         raise ValueError("Name dataset does not exists.")
-    return dataset, dataset[0][0].shape, labels
+
+    # check if shape of data instances is the same in test and train
+    assert data_train[0][0].shape == data_test[0][0].shape
+    data_shape = data_train[0][0].shape
+
+    return data_train, data_test, data_shape, labels
 
 
 

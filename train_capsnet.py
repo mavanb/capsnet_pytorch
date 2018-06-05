@@ -39,7 +39,8 @@ def main():
     log = get_logger(__name__)
     log.info(parser.format_values())
     transform = transforms.ToTensor()
-    dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
+
+    data_train, data_test, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 
     model = BasicCapsNet(in_channels=data_shape[0], digit_caps=label_shape, vec_len_prim=8, vec_len_digit=16,
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
@@ -51,7 +52,7 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    trainer = CapsuleTrainer(model, capsule_loss, optimizer, dataset, conf)
+    trainer = CapsuleTrainer(model, capsule_loss, optimizer, data_train, data_test, conf)
 
     trainer.run()
 

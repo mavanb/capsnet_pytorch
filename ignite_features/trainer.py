@@ -11,7 +11,7 @@ from ignite.engines.engine import Events, Engine
 from ignite_features.metric import ValueEpochMetric, ValueIterMetric, TimeMetric
 from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
 from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
-from utils import get_device, flex_profile, get_logger
+from utils import get_device, flex_profile, get_logger, calc_entropy
 import time
 
 
@@ -48,7 +48,7 @@ class Trainer:
     """
 
     @flex_profile
-    def __init__(self, model, loss, optimizer, dataset, conf):
+    def __init__(self, model, loss, optimizer, data_train, data_test, conf):
 
         self.model = model
         self.loss = loss
@@ -61,11 +61,19 @@ class Trainer:
         # init visdom
         if conf.use_visdom:
             self.vis = visdom.Visdom()
-            if not self.vis.check_connection():
+
+            # if no connection and should start
+            if (not self.vis.check_connection()) and conf.start_visdom:
                 self._log.info("No visdom connection found. Starting visdom.")
                 import subprocess
                 import sys
-                subprocess.Popen([f"{sys.executable}", "-m", "visdom.server", "-logging_level", "50"])
+
+                # create visdom enviroment path if not exists
+                if not os.path.exists(conf.visdom_path):
+                    os.makedirs(conf.visdom_path)
+
+                subprocess.Popen([f"{sys.executable}", "-m", "visdom.server", "-logging_level", "50", "-env_path",
+                                  conf.visdom_path])
 
                 retries = 0
                 while (not self.vis.check_connection()) and retries < 10:
@@ -76,6 +84,13 @@ class Trainer:
                     self._log.info("Succesfully started Visdom.")
                 else:
                     raise RuntimeError("Could not start Visdom")
+
+            # if no connection and shouldn't start
+            elif not self.vis.check_connection():
+                raise RuntimeError("Start visdom manually or set start_visdom to True")
+
+            else:
+                self._log.info("Use existing Visdom connection")
         else:
             # initializing visdom plots is slow.To avoid if statements for every added plot init vis as None
             # and handle this within the VisPlotter class.
@@ -91,12 +106,14 @@ class Trainer:
         self._log.info("Model architecture: \n" + str(model))
 
         # init data sets
-        kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
-        kwargs = {**kwargs, 'train_max': 4, 'valid_max': 2} if conf.debug else kwargs
+        cuda_kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
+        kwargs = {**cuda_kwargs, 'train_max': 4, 'valid_max': 2} if conf.debug else cuda_kwargs
         kwargs = {**kwargs, "seed": conf.seed} if conf.seed else kwargs
-        self.train_loader, self.val_loader = get_train_valid_data(dataset, batch_size=conf.batch_size,
+        self.train_loader, self.val_loader = get_train_valid_data(data_train, batch_size=conf.batch_size,
                                                                   drop_last=conf.drop_last,
                                                                   shuffle=conf.shuffle, **kwargs)
+        self.test_loader = torch.utils.data.DataLoader(data_test, batch_size=conf.batch_size, drop_last=conf.drop_last,
+                                                       **cuda_kwargs)
 
         model.to(self.device)
         torch.backends.cudnn.benchmark = conf.cudnn_benchmark
@@ -112,31 +129,33 @@ class Trainer:
                 self._log.info("No model to load found. Start training new model.")
 
         self.train_engine = Engine(self._train_function, self)
-        self.eval_engine = Engine(self._validate_function, self)
+        self.valid_engine = Engine(self._valid_function, self)
+        self.test_engine = Engine(self._test_function, self)
 
         # add train metrics
         ValueIterMetric(lambda x: x["loss"]).attach(self.train_engine, "batch_loss")  # for plot and progress log
         ValueIterMetric(lambda x: x["acc"]).attach(self.train_engine, "batch_acc")  # for plot and progress log
 
         self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                            VisIterPlotter(self.train_engine, self.vis, "batch_loss", "Loss",
-                                                      "Training Batch Loss"))
+                                            VisIterPlotter(self.vis, "batch_loss", "Loss", "Training Batch Loss", self.conf.model_name))
         self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                            VisIterPlotter(self.train_engine, self.vis, "batch_acc", "Acc",
-                                                      "Training Batch Acc"))
+                                            VisIterPlotter(self.vis, "batch_acc", "Acc", "Training Batch Acc", self.conf.model_name))
 
         # add logs handlers, requires batch_loss and batch_acc metrics
         self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, LogTrainProgressHandler())
 
-        # add eval metrics
-        ValueEpochMetric(lambda x: x["acc"]).attach(self.eval_engine, "acc")  # for plot and logging
-        ValueEpochMetric(lambda x: x["loss"]).attach(self.eval_engine, "loss")  # for plot, logging and early stopping
+        # add valid metrics
+        ValueEpochMetric(lambda x: x["acc"]).attach(self.valid_engine, "acc")  # for plot and logging
+        ValueEpochMetric(lambda x: x["loss"]).attach(self.valid_engine, "loss")  # for plot, logging and early stopping
 
-        # add eval plots
-        self.eval_engine.add_event_handler(Events.EPOCH_COMPLETED,
-                                            VisEpochPlotter(self.eval_engine, self.vis, "acc", "Acc", "Validation Acc"))
-        self.eval_engine.add_event_handler(Events.EPOCH_COMPLETED,
-                                           LogEpochMetricHandler('Validation set: {:.2f}', "acc"))
+        # add valid plots and logger
+        # self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED,
+        #                                     VisEpochPlotter(self.vis, "acc", "Acc", "Validation Acc"))
+        self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED,
+                                            LogEpochMetricHandler('Validation set: {:.4f}', "acc"))
+
+        # print start end testing
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda _: self._log.info("Done testing"))
 
         # add events custom the events
         self._add_custom_events()
@@ -146,7 +165,7 @@ class Trainer:
             early_stop_handler = EarlyStopping(patience=1,
                                                score_function=lambda engine: engine.state.metrics["loss"],
                                                trainer=self.train_engine)
-            self.eval_engine.add_event_handler(Events.COMPLETED, early_stop_handler)
+            self.valid_engine.add_event_handler(Events.COMPLETED, early_stop_handler)
 
         # saves models
         save_handler = ModelCheckpoint(conf.trained_model_path, conf.model_name, save_interval=1,
@@ -163,15 +182,28 @@ class Trainer:
         # makes sure eval_engine is started after train epoch, should be after all custom train_engine epoch_completed
         # events
         @self.train_engine.on(Events.EPOCH_COMPLETED)
-        def call_evaluator(_):
-            self.eval_engine.run(self.val_loader)
+        def call_valid(_):
+            self.valid_engine.run(self.val_loader)
 
-        # make that epoch in eval_engine gives correct epoch (same train_engine was during run), but makes sure only
-        # runs once
-        @self.eval_engine.on(Events.STARTED)
+        # makes sure test_engine is started after train epoch, should be after all custom valid_engine epoch_completed
+        # events
+        @self.valid_engine.on(Events.EPOCH_COMPLETED)
+        def call_test(_):
+            self.test_engine.run(self.test_loader)
+
+        # make that epoch in valid_engine and test_engine gives correct epoch (same train_engine was during run),
+        # but makes sure only runs once
+        @self.valid_engine.on(Events.STARTED)
+        @self.test_engine.on(Events.STARTED)
         def set_train_epoch(engine):
             engine.state.epoch = self.train_engine.state.epoch - 1
             engine.state.max_epochs = self.train_engine.state.epoch
+
+        # Save the visdom environment
+        @self.test_engine.on(Events.EPOCH_COMPLETED)
+        def save_visdom_env(_):
+            if isinstance(self.vis, visdom.Visdom):
+                self.vis.save([self.conf.model_name])
 
     def run(self):
         self.train_engine.run(self.train_loader, max_epochs=self.conf.epochs)
@@ -184,8 +216,12 @@ class Trainer:
         raise NotImplementedError("Please implement abstract function _train_function.")
 
     @staticmethod
-    def _validate_function(engine, trainer, batch):
-        raise NotImplementedError("Please implement abstract function _validate_function.")
+    def _valid_function(engine, trainer, batch):
+        raise NotImplementedError("Please implement abstract function _valid_function.")
+
+    @staticmethod
+    def _test_function(engine, trainer, batch):
+        raise NotImplementedError("Please implement abstract function _test_function.")
 
 
 class CapsuleTrainer(Trainer):
@@ -207,11 +243,11 @@ class CapsuleTrainer(Trainer):
         total_loss.backward()
         trainer.optimizer.step()
 
-        return {"loss": total_loss.item(), "time": (time.time(), data.shape[0]), "acc": acc, "rout_stats":
+        return {"loss": total_loss.item(), "time": (time.time(), data.shape[0]), "acc": acc.item(), "rout_stats":
             rout_stats}
 
     @staticmethod
-    def _validate_function(engine, trainer, batch):
+    def _valid_function(engine, trainer, batch):
         trainer.model.eval()
 
         with torch.no_grad():
@@ -223,74 +259,117 @@ class CapsuleTrainer(Trainer):
 
             acc = trainer.model.compute_acc(class_probs, labels)
 
-        return {"loss": total_loss.item(), "acc": acc, "epoch": trainer.model.epoch, "rout_stats":
+        return {"loss": total_loss.item(), "acc": acc.item(), "epoch": trainer.model.epoch, "rout_stats":
             rout_stats}
+
+    @staticmethod
+    def _test_function(engine, trainer, batch):
+
+        model = trainer.model
+        model.eval()
+
+        # sparsify used during training
+        train_sparsify = trainer.conf.sparsify
+
+        # return dict
+        test_dict = {}
+
+        with torch.no_grad():
+            data = batch[0].to(trainer.device)
+            labels = batch[1].to(trainer.device)
+
+            model.set_sparsify("None")
+
+            logits, recon, caps, stats = model(data)
+            acc = model.compute_acc(logits, labels)
+            probs = model.compute_probs(logits)
+            prob_entropy = calc_entropy(probs, dim=1).mean().item()
+
+            test_dict["None"] = {}
+            test_dict["None"]["acc"] = acc.item()
+            test_dict["None"]["stats"] = stats
+            test_dict["None"]["prob_entropy"] = prob_entropy
+
+            if train_sparsify != "None":
+
+                model.set_sparsify(train_sparsify)
+
+                logits, recon, caps, stats = model(data)
+                acc = model.compute_acc(logits, labels)
+                probs = model.compute_probs(logits)
+                prob_entropy = calc_entropy(probs, dim=1).mean().item()
+
+                test_dict[train_sparsify] = {}
+                test_dict[train_sparsify]["acc"] = acc.item()
+                test_dict[train_sparsify]["stats"] = stats
+                test_dict[train_sparsify]["prob_entropy"] = prob_entropy
+
+        # set sparsity back to original setting
+        model.set_sparsify(train_sparsify)
+
+        return test_dict
 
     @flex_profile
     def _add_custom_events(self):
 
         if self.conf.sparsify == "nodes_threshold":
-            ValueEpochMetric(lambda x: x["rout_stats"]["mask_rato"]).attach(self.train_engine, "mask_rato_epoch")
-
-            # plot per epoch
-            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED,
-                                                VisEpochPlotter(self.train_engine, self.vis, "mask_rato_epoch", "Ratio",
-                                                                "Mask Ratio per epoch"))
-
             # tracking mask per iter
-            ValueIterMetric(lambda x: x["rout_stats"]["mask_rato"]).attach(self.train_engine, "mask_rato_iter")
+            ValueIterMetric(lambda x: x["rout_stats"]["mask_rato"]).attach(self.train_engine, "mask_rato")
 
             # plot per iter
-            self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                                VisIterPlotter(self.train_engine, self.vis, "mask_rato_iter", "Ratio",
-                                                               "Mask Ratio per iteration"))
+            mask_rato_plot = VisIterPlotter(self.vis, "mask_rato", "Ratio", "Mask Ratio per iteration")
+            self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, mask_rato_plot)
 
-            # track maximum negative deviation per iter
-            ValueIterMetric(lambda x: x["rout_stats"]["max_neg_devs"]).attach(self.train_engine, "max_neg_devs_iter")
-
-            # plot metric per iter
-            self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                                VisIterPlotter(self.train_engine, self.vis, "max_neg_devs_iter", "Ratio"
-                                                               ,"Max neg devs per iteration"))
-
-            # track average negative deviation per iter
-            ValueIterMetric(lambda x: x["rout_stats"]["avg_neg_devs"]).attach(self.train_engine, "avg_neg_devs_iter")
-
-            # plot metric per iter
-            self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                                VisIterPlotter(self.train_engine, self.vis, "avg_neg_devs_iter", "Ratio"
-                                                               , "Avg neg devs per iteration"))
-
-        if self.conf.sparsify == "edges_threshold":
-            pass
-        if self.conf.sparsify == "edges_topk":
-            pass
+        # callable to get entropy of routing iter
+        get_h = lambda iter: lambda x: x["rout_stats"]["H_c_vec"][iter]
 
         # Add entropy metric and plots for each routing iter
         # skip first routing iter, because entropy uniform anyways
-        for i in range(1, self.conf.routing_iters):
+        def get_entropy_names(i):
+            entropy_name = f"h_rout_{i}"
+            ValueIterMetric(get_h(i)).attach(self.train_engine, entropy_name)
+            return entropy_name
 
-            # callable to get entropy of routing iter
-            get_h = lambda x: x["rout_stats"]["H_c_vec"][i]
+        entropy_metric_names = [get_entropy_names(i) for i in range(1, self.conf.routing_iters)]
 
-            ValueEpochMetric(get_h).attach(self.train_engine, f"h_rout_{i}")
-            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.train_engine, self.vis,
-                                                                                        f"h_rout_{i}", "H", f"Train entropy {i}"))
+        train_entropy_plot = VisIterPlotter(self.vis, entropy_metric_names, "H", "Train entropy", entropy_metric_names)
+        self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, train_entropy_plot)
 
-            ValueEpochMetric(get_h).attach(self.eval_engine, f"h_rout_{i}")
-            self.eval_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.eval_engine, self.vis,
-                                                                                       f"h_rout_{i}", "H", f"Valid entropy {i}"))
+        # Add metric and plots to track the entropy of the logits
+        # if sparsity method is used, plot both with and without using this method on inference
+        ValueEpochMetric(lambda x: x["None"]["prob_entropy"]).attach(self.test_engine, "prob_h")
+        if self.conf.sparsify != "None":
+            ValueEpochMetric(lambda x: x[self.conf.sparsify]["prob_entropy"]).attach(self.test_engine, "prob_h_sparse")
+        prop_names = "prob_h" if self.conf.sparsify == "None" else ["prob_h", "prob_h_sparse"]
+        prop_legend = None if self.conf.sparsify == "None" else ["No sparse", self.conf.sparsify]
+        prop_entropy_plot = VisEpochPlotter(self.vis, prop_names, "H", "Entropy of the softmaxed logits", self.conf.model_name, prop_legend)
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, prop_entropy_plot)
+
+        # Add metric and plots to track the mean entropy of the weights after routing
+        # if sparsity method is used, plot both with and without using this method on inference
+        # plot the entropy at the last routing iteration, the last index is routing_iters-1
+        ValueEpochMetric(lambda x: x["None"]["stats"]["H_c_vec"][self.conf.routing_iters - 1]).attach(self.test_engine, "h_rout")
+        if self.conf.sparsify != "None":
+            ValueEpochMetric(lambda x: x[self.conf.sparsify]["stats"]["H_c_vec"][self.conf.routing_iters - 1]).attach(
+                self.test_engine, "h_rout_sparse")
+        h_weight_names = "h_rout" if self.conf.sparsify == "None" else ["h_rout", "h_rout_sparse"]
+        h_weight_legend = None if self.conf.sparsify == "None" else ["No sparse", self.conf.sparsify]
+        h_weight_plot = VisEpochPlotter(self.vis, h_weight_names, "H", "Mean Weight Entropy", self.conf.model_name, h_weight_legend)
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, h_weight_plot)
+
+        ValueEpochMetric(lambda x: x["None"]["acc"]).attach(self.test_engine, "acc")
+        if self.conf.sparsify != "None":
+            ValueEpochMetric(lambda x: x[self.conf.sparsify]["acc"]).attach(self.test_engine, "acc_sparse")
+        acc_weight_names = "acc" if self.conf.sparsify == "None" else ["acc", "acc_sparse"]
+        acc_weight_legend = None if self.conf.sparsify == "None" else ["No sparse", self.conf.sparsify]
+        acc_weight_plot = VisEpochPlotter(self.vis, acc_weight_names, "acc", "Test Accuracy", self.conf.model_name, acc_weight_legend)
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_weight_plot)
+
 
         if self.conf.print_time:
             TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
-            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, VisEpochPlotter(self.train_engine, self.vis,
-                                                                                        "time", "Time in s", "Time per sample"))
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
                 'Time per example: {:.4f} sec', "time"))
-
-        if self.conf.excessive_testing:
-            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, excessive_testing_handler(self.vis, self.conf, 3),
-                                                self.model)
 
 
 class CNNTrainer(Trainer):
@@ -313,7 +392,7 @@ class CNNTrainer(Trainer):
         return {"loss": loss.item(), "time": (time.time(), data.shape[0]), "acc": acc}
 
     @staticmethod
-    def _validate_function(engine, trainer, batch):
+    def _valid_function(engine, trainer, batch):
         trainer.model.eval()
 
         with torch.no_grad():
@@ -332,6 +411,6 @@ class CNNTrainer(Trainer):
         if self.conf.print_time:
             TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED,
-                                      VisEpochPlotter(self.train_engine, self.vis, "time", "Time in s", "Time per sample"))
+                                      VisEpochPlotter(self.vis, "time", "Time in s", "Time per sample", self.conf.model_name))
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED,
                                       LogEpochMetricHandler('Time per example: {:.2f} sec', "time"))

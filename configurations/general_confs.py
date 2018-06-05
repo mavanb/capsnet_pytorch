@@ -1,6 +1,6 @@
 import configargparse
 import torch.cuda
-
+import os
 
 def parse_bool(v):
     """ Bool type to set in add in parser.add_argument to fix not parsing of False. See:
@@ -34,6 +34,15 @@ def get_conf(custom_args=lambda x: x):
     conf.model_checkpoint_path = "{}/{}{}".format(conf.trained_model_path, conf.model_name,
                                                   "_debug" if conf.debug else "")
     conf.model_load_path = "{}/{}".format(conf.trained_model_path, conf.load_name)
+
+    # if use visdom, save config to visdom path to easily find config with environment
+    if conf.use_visdom:
+
+        if not os.path.exists(conf.visdom_path):
+            os.makedirs(conf.visdom_path)
+
+        with open(f"{conf.visdom_path}/{conf.model_name}.txt", "w") as f:
+            f.write(parser.format_values())
 
     return conf, parser
 
@@ -69,6 +78,8 @@ p.add_argument('--n_saved', type=int, required=True, help='Models are save every
 p.add_argument('--early_stop', type=parse_bool, required=True, help='Early stopping on validation loss')
 p.add_argument('--cudnn_benchmark', type=parse_bool, required=True, help='Bool for cudnn benchmarking. Faster for large')
 p.add_argument('--use_visdom', type=parse_bool, required=True, help='Makes plot in visdom yes/no. Slows startup time.')
+p.add_argument('--start_visdom', type=parse_bool, required=True, help='Automatically start visdom if not running yes/no.')
+p.add_argument('--visdom_path', type=str, required=True, help='Path where visdom envs are saved if automatic start')
 
 
 

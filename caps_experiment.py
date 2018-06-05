@@ -76,7 +76,7 @@ class DoubleCapsNet(_CapsNet):
 
         self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=10, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=False, sparse_topk=sparse_topk)
+                                               sparsify=sparsify, sparse_topk=sparse_topk)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 
@@ -98,14 +98,24 @@ class DoubleCapsNet(_CapsNet):
 
         ### test extra layer
         all_caps1 = self.dense_caps_layer1(primary_caps_flat)
-        caps1, stats = self.dynamic_routing1(all_caps1, self.routing_iters)
+        caps1, stats1 = self.dynamic_routing1(all_caps1, self.routing_iters)
         all_caps2 = self.dense_caps_layer2(caps1)
-        final_caps, _ = self.dynamic_routing2(all_caps2, self.routing_iters)
+        final_caps, stats2 = self.dynamic_routing2(all_caps2, self.routing_iters)
 
         logits = self.compute_logits(final_caps)
 
         decoder_input = self.create_decoder_input(final_caps, t)
         recon = self.decoder(decoder_input)
+
+        assert stats1["H_c_vec"], "Routing stats should contain H_c_vec"
+        assert stats2["H_c_vec"], "Routing stats should contain H_c_vec"
+        assert stats1["H_c_vec"].keys() == stats2["H_c_vec"].keys(), "Assumes that both dict have the same number of " \
+                                                                     "routing iterations."
+
+        stats = {}
+        stats["H_c_vec"] = {}
+        for routing_key in stats1["H_c_vec"].keys():
+            stats["H_c_vec"][routing_key] = (stats1["H_c_vec"][routing_key] + stats2["H_c_vec"][routing_key])/2
 
         return logits, recon, final_caps, stats
 
@@ -202,7 +212,7 @@ def main():
     log = get_logger(__name__)
     log.info(parser.format_values())
     transform = transforms.ToTensor()
-    dataset, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
+    data_train, data_test, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 
     model = DoubleCapsNet(in_channels=data_shape[0], digit_caps=label_shape, vec_len_prim=8, vec_len_digit=16,
                          routing_iters=conf.routing_iters, prim_caps=conf.prim_caps, in_height=data_shape[1],
@@ -214,7 +224,7 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    trainer = CapsuleTrainer(model, capsule_loss, optimizer, dataset, conf)
+    trainer = CapsuleTrainer(model, capsule_loss, optimizer, data_train, data_test, conf)
 
     trainer.run()
 
