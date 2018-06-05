@@ -1,0 +1,37 @@
+Command Line Args:   --sparsify edges_random --dataset cifar10 --model_name cifar10_edges_random
+Config File (configurations/exp_capsnet.conf):
+  alpha:             0.0005
+  m_plus:            0.9
+  m_min:             0.1
+  squash_dim:        2
+  softmax_dim:       1
+  excessive_testing: False
+  routing_iters:     3
+  bias_routing:      True
+  sparse_threshold:  0.09999
+  sparse_topk:       0.1;0.3
+  prim_caps:         32
+  stdev_W:           0.1
+Config File (./configurations/general_cuda.conf):
+  trained_model_path:./trained_models
+  save_trained:      True
+  load_name:         None
+  load_model:        False
+  n_saved:           1
+  visdom_path:       ./visdom
+  epochs:            7
+  batch_size:        128
+  drop_last:         True
+  shuffle:           True
+  seed:              42
+  debug:             False
+  print_time:        True
+  log_file:          False
+  log_file_name:     None
+  early_stop:        False
+  cudnn_benchmark:   True
+  start_visdom:      False
+  use_visdom:        True
+Defaults:
+  --general_config:  ./configurations/general_cuda.conf
+  --exp_capsnet_config:configurations/exp_capsnet.conf

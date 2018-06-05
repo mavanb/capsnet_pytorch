@@ -2,7 +2,6 @@
 **/\.idea/
 *.lprof
 
-visdom/**
 
 logs/**
 data/mnist/**
