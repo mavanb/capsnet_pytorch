@@ -1,4 +1,4 @@
-Config File (configurations/exp_capsnet.conf):
+Config File (./configurations/exp_capsnet.conf):
   alpha:             0.0005
   m_plus:            0.9
   m_min:             0.1
@@ -8,32 +8,34 @@ Config File (configurations/exp_capsnet.conf):
   routing_iters:     3
   bias_routing:      True
   sparse_threshold:  0.09999
-  sparsify:          edges_topk
+  sparsify:          None
   sparse_topk:       0.1;0.3
-  prim_caps:         32
+  hidden_capsules:   50
+  prim_caps:         2
   dataset:           mnist
   stdev_W:           0.1
-  model_name:        mnist_edges_topk
-Config File (./configurations/general_cuda.conf):
+  model_name:        test
+Config File (./configurations/general_local.conf):
   trained_model_path:./trained_models
   save_trained:      True
-  load_name:         None
+  load_name:         simple_caps_net_cuda2
   load_model:        False
-  n_saved:           1
+  n_saved:           2
   visdom_path:       ./visdom
-  epochs:            7
+  epochs:            10
   batch_size:        128
   drop_last:         True
   shuffle:           True
   seed:              42
-  debug:             False
+  debug:             True
   print_time:        True
   log_file:          False
   log_file_name:     None
   early_stop:        False
   cudnn_benchmark:   True
-  start_visdom:      True
+  start_visdom:      False
   use_visdom:        True
+  valid_size:        0.1
 Defaults:
-  --general_config:  ./configurations/general_cuda.conf
-  --exp_capsnet_config:configurations/exp_capsnet.conf
+  --general_config:  ./configurations/general_local.conf
+  --config_file_exp_capsnet:./configurations/exp_capsnet.conf

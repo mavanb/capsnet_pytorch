@@ -160,7 +160,7 @@ class BasicCapsNet(_CapsNet):
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
         self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
-                                                  vec_len_digit, routing_iters, stdev_W)
+                                                  vec_len_digit, stdev_W)
 
         self.dynamic_routing = DynamicRouting(digit_caps, in_features_dense_layer, vec_len_digit, softmax_dim,
                                               bias_routing, sparse_threshold, sparsify, sparse_topk)

@@ -51,11 +51,11 @@ class TimeMetric(Metric):
         if self._prev_time:
             batch_size = output[1]
             new_diff = (new_time - self._prev_time)
+            total = self._num_examples + batch_size
             # _avg_diff gives time per sample. Thus, to update we compute the weighted average:
             # avg_diff * (num_examples / total) + avg_new_diff * (batch_size / total)
-            # avg_new_diff * batch_size = new_diff / batch_size * batch_size = new_diff
-            self._avg_diff = (self._avg_diff * self._num_examples + new_diff) / \
-                             (self._num_examples + batch_size)
+            # avg_new_diff * batch_size = (new_diff / batch_size) * batch_size = new_diff
+            self._avg_diff = (self._avg_diff * self._num_examples + new_diff) / total
             self._num_examples += batch_size
         self._prev_time = new_time
 

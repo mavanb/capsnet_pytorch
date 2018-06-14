@@ -58,7 +58,7 @@ def calc_entropy(input_tensor, dim):
     assert dim < len(input_tensor.shape), "Dimension {} does not exists".format(dim)
 
     # slice should represent a probablity distribution, thus sum to one
-    assert (get_approx_value(input_tensor.sum(dim=dim), 1) == False).nonzero().shape == torch.Size([0]), "Dimension {} " \
+    assert (get_approx_value(input_tensor.sum(dim=dim), 1, 1e2) == False).nonzero().shape == torch.Size([0]), "Dimension {} " \
         "does not sum to 1 everywhere".format(dim)
 
     # return entropy: H(p(x)) = sum_i p(x=i) log(1/p(x=i))

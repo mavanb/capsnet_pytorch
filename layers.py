@@ -9,7 +9,7 @@ class DynamicRouting(nn.Module):
         super().__init__()
         self.soft_max = torch.nn.Softmax(dim=softmax_dim)
         self.j = j
-        self.i = i
+        # self.i = i
         self.n = n
 
         # init depends on batch_size which depends on input size, declare dynamically in forward. see:
@@ -29,6 +29,7 @@ class DynamicRouting(nn.Module):
         self.sparse_topk = [float(i) for i in sparse_topk.split(";")]
         self.sparsify = sparsify
 
+    @flex_profile
     def forward(self, u_hat, iters):
 
         # check if enough topk values ratios are given in the configuration
@@ -36,10 +37,14 @@ class DynamicRouting(nn.Module):
                             "Example: routing iters: 3, sparse_topk = 0.4;0.4"
 
         b = u_hat.shape[0]
+        self.i = u_hat.shape[2]
         routing_stats = {}
 
-        if self.b_vec is None:
-            self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(),  requires_grad=False)
+        # todo: previously b_vec as only init once, but than the class must always have the same input shape
+        # todo: it seems that init does not cost much time, so temporily do it this way
+        # if self.b_vec is None:
+        #     self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(),  requires_grad=False)
+        self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(), requires_grad=False)
         b_vec = self.b_vec
 
         # track entropy of b_vec per iter
@@ -51,7 +56,8 @@ class DynamicRouting(nn.Module):
             c_vec = self.soft_max(b_vec)
 
             # compute entropy of weight distribution of all capsules
-            routing_stats["H_c_vec"][index] = calc_entropy(c_vec, dim=1).mean().item()
+            # routing_stats["H_c_vec"][index] = calc_entropy(c_vec, dim=1).mean().item()
+            routing_stats["H_c_vec"][index] = 0
 
             # created unsquashed prediction for parents capsules by a weighted sum over the child predictions
             # in einsum: bij, bjin-> bjn
@@ -59,7 +65,7 @@ class DynamicRouting(nn.Module):
             s_vec = torch.matmul(c_vec.view(b, self.j, 1, self.i), u_hat).squeeze()
 
             # add bias to s_vec
-            if type(self.bias) == torch.nn.Parameter:
+            if type(self.bias) == torch.Tensor:
                 s_vec_bias = s_vec + self.bias
 
                 # don't add a bias to capsules that have no activation add all
@@ -76,7 +82,7 @@ class DynamicRouting(nn.Module):
                 # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
                 # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, self.i, 1, self.n),
-                                             v_vec.view(b, self.j, 1, self.n, 1)).squeeze()
+                                             v_vec.view(b, self.j, 1, self.n, 1)).view(b, self.j, self.i)
 
                 if self.sparsify == "nodes_threshold":
                     b_vec, routing_stats = self.sparsify_nodes_threshold(b_vec, index, iters, routing_stats)
@@ -95,15 +101,20 @@ class DynamicRouting(nn.Module):
 
     def sparsify_nodes_topk(self, b_vec, index, iters, routing_stats):
 
-        # incoming weight of parent capsule (average over childs)
-        z_j = b_vec.sum(dim=2) / self.i
-
         current_mask_rato = self.sparse_topk[index]
 
         # number of elements to mask: mask rato times abs number
         mask_count = int(current_mask_rato * self.j)
 
         if mask_count > 0:
+
+            # set prev -inf to inf to ignore them (only after first iter)
+            if index > 0:
+                prev_inf_mask = b_vec == float("-inf")
+                b_vec[prev_inf_mask] = float("inf")
+
+            # incoming weight of parent capsule (average over childs)
+            z_j = b_vec.sum(dim=2) / self.i
 
             # take bottomk smallest values
             val, _ = torch.topk(z_j, mask_count, largest=False, sorted=False, dim=1)
@@ -114,6 +125,10 @@ class DynamicRouting(nn.Module):
             # mask all equal or smaller than largest smallest value
             delete_values = torch.le(z_j, kthvalues)
 
+            # set prev -inf back (only after first iter)
+            if index > 0:
+                b_vec[prev_inf_mask] = float("-inf")
+
             b_vec[delete_values, :] = float("-inf")
 
             assert ((b_vec == float("-inf")).sum(dim=1) == self.j).nonzero().shape == torch.Size([0]), "Too many topk " \
@@ -122,31 +137,79 @@ class DynamicRouting(nn.Module):
         return b_vec, routing_stats
 
     def sparsify_edges_random(self, b_vec, index, iters, routing_stats):
+        #todo| make sure that each column (child) has the same amount of masked elements. Requires shuffling, randperm
+        #todo| works only in one dimension
 
         current_mask_rato = self.sparse_topk[index]
 
-        random_ratios = torch.rand_like(b_vec, device=get_device(), requires_grad=False)
+        if current_mask_rato > 0:
 
-        mask = torch.le(random_ratios, current_mask_rato)
+            random_ratios = torch.rand_like(b_vec, device=get_device(), requires_grad=False)
 
-        ## Random edges mask with deterministic mask ratio, but same for each batch,
-        ## a problem could be that gradient signal in each batch is to specialized
-        # b = b_vec.shape[0]
-        # total = self.j * self.i
-        # ones_count = round(current_mask_rato * total)
-        # zero_count = total - ones_count
-        #
-        # x = torch.zeros(zero_count, dtype=torch.uint8, device=get_device())
-        # y = torch.ones(ones_count, dtype=torch.uint8, device=get_device())
-        # xy = torch.cat((x, y))
-        # mask = xy[torch.randperm(total)].view(1, self.j, self.i)
+            mask = torch.le(random_ratios, current_mask_rato)
 
-        valid_mask = self.resolve_full_inf(b_vec, mask, method="no_mask")
-        b_vec[valid_mask] = float("-inf")
+            ## Random edges mask with deterministic mask ratio, but same for each batch,
+            ## a problem could be that gradient signal in each batch is to specialized
+            # b = b_vec.shape[0]
+            # total = self.j * self.i
+            # ones_count = round(current_mask_rato * total)
+            # zero_count = total - ones_count
+            #
+            # x = torch.zeros(zero_count, dtype=torch.uint8, device=get_device())
+            # y = torch.ones(ones_count, dtype=torch.uint8, device=get_device())
+            # xy = torch.cat((x, y))
+            # mask = xy[torch.randperm(total)].view(1, self.j, self.i)
+
+            valid_mask = self.full_inf(b_vec, mask, method="no_mask")
+            b_vec[valid_mask] = float("-inf")
 
         return b_vec, routing_stats
 
     def sparsify_edges_topk(self, b_vec, index, iters, routing_stats, resolve_full_inf="no_mask"):
+
+        current_mask_rato = self.sparse_topk[index]
+
+        # number of elements to mask: mask rato times abs number
+        mask_count = int(current_mask_rato * self.j)
+
+        # mask_count of 0 means no sparsify, thus skip
+        if mask_count > 0:
+
+            # set all non top k to -inf, not trivial. topk returns an indices, which can't be used to index on b_vec (thus,
+            # b_vec[indices] does't work). Therefore, we take the kth value and use torch.ge to get the binary tensor, which
+            # can be used to index on. However, torch.kthvalue is does not work on cuda (https://github.com/pytorch/pytorch/
+            # issues/2134). Instead, we take the max of topk (is largest excluded value).
+
+            # set prev -inf to inf to ignore them
+            prev_inf_mask = b_vec == float("-inf")
+            b_vec[prev_inf_mask] = float("inf")
+
+            # take bottomk smallest values
+            val, _ = torch.topk(b_vec, mask_count, largest=False, sorted=False, dim=1)
+
+            # get largest smallest value
+            kthvalues, _ = torch.max(val, dim=1, keepdim=True)
+
+            # mask all equal or smaller than largest smallest value
+            mask = torch.le(b_vec, kthvalues)
+
+            # set prev -inf back
+            b_vec[prev_inf_mask] = float("-inf")
+
+            # check full inf cols
+            self.full_inf(b_vec, mask, method="raise")
+
+
+            # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
+            b_vec[mask] = float("-inf")
+
+        return b_vec, routing_stats
+
+    def sparsify_edges_topk_old(self, b_vec, index, iters, routing_stats, resolve_full_inf="no_mask"):
+        """ In this sparsify edges topk implementation, the smallest edges of all edges in a layer are dropped.
+        This means that for childs some more edges are than for others, potentially, all edges may be dropped.
+        In the new implemention sparsify_edges_topk, we only drop columnwise (same amount per child capsule).
+        """
 
         # reshape to allow top k over i and j dim
         b_vec_flat = b_vec.view(-1, self.i * self.j)
@@ -177,14 +240,14 @@ class DynamicRouting(nn.Module):
             mask = flat_mask.view(-1, self.j, self.i)
 
             # resolve full inf cols
-            valid_mask = self.resolve_full_inf(b_vec, mask, method=resolve_full_inf)
+            valid_mask = self.full_inf(b_vec, mask, method=resolve_full_inf)
 
             # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
             b_vec[valid_mask] = float("-inf")
 
         return b_vec, routing_stats
 
-    def resolve_full_inf(self, b_vec, mask, method):
+    def full_inf(self, b_vec, mask, method):
 
         # compute the entries that do not have only -inf on the j colums
         # the entries with inf in b_vec if the mask is applied, | gives OR operator
@@ -212,6 +275,9 @@ class DynamicRouting(nn.Module):
         elif method == "no_mask":
             # other mask method, don't apply mask on this col at all if causes full inf column
             valid_mask = mask & (full_inf ^ 1)
+        elif method == "raise":
+            if full_inf.sum() > 0:
+                raise ValueError("Sparsifying resulted in full inf column.")
         else:
             raise ValueError("Method to resolve full infinite j column does not exits.")
 
@@ -325,21 +391,47 @@ class Conv2dPrimaryLayer(nn.Module):
 
 class DenseCapsuleLayer(nn.Module):
 
-    def __init__(self, in_capsules, out_capsules, vec_len_in, vec_len_out, routing_iters, stdev):
+    def __init__(self, in_capsules, out_capsules, vec_len_in, vec_len_out, stdev):
         super(DenseCapsuleLayer, self).__init__()
 
-        self.in_capsules = in_capsules
-        self.out_channels = out_capsules
-        self.vector_len_in = vec_len_in
-        self.vector_len_out = vec_len_out
-        self.routing_iters = routing_iters
+        self.i = in_capsules
+        self.j = out_capsules
+        self.m = vec_len_in
+        self.n = vec_len_out
 
         self.W = nn.Parameter(stdev * torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
 
     def forward(self, input):
-        batch_size = input.shape[0]
-        input_ = input.view(batch_size, 1, self.in_capsules, self.vector_len_in, 1)
-        u_hat = torch.matmul(self.W, input_).squeeze()
+        b,i,m = input.shape
+        n = self.n
+        j = self.j
+        assert i == self.i, "Unexpected number of childs as input"
+        assert m == self.m, "Unexpected vector lenght as input"
+
+        # the number of zero rows (m index all zero) in the input, for speed check only for the first item in batch
+        zero_count = (input[0].sum(dim=1) == 0.0).sum().item()
+
+        if zero_count > 0:
+
+            non_zero_count = i - zero_count
+
+            # chech which rows are not zero, and put in format to use for batch_index_select
+            select_idx = (input.sum(dim=2) != 0.0).nonzero()[:, 1].view(b, non_zero_count)
+
+            # expand W such that we can multiply batch elements with its own truncated W
+            W = self.W.expand(b, self.j, self.i, self.n, self.m)
+            W = batched_index_select(W, 2, select_idx)
+            input = batched_index_select(input, 1, select_idx)
+        else:
+            W = self.W
+
+        input = input.view(b, 1, input.shape[1], self.m, 1)
+
+        # W: bjinm or 1jinm
+        # input: b1jm1
+        # matmul: bji(nm) * b1j(m1) = bjin1
+        u_hat = torch.matmul(W, input).view(b, j, i - zero_count, n)
+
         return u_hat
 
 

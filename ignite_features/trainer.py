@@ -12,6 +12,7 @@ from ignite_features.metric import ValueEpochMetric, ValueIterMetric, TimeMetric
 from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
 from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
 from utils import get_device, flex_profile, get_logger, calc_entropy
+from ignite_features.handlers import SaveBestScore
 import time
 
 
@@ -47,7 +48,6 @@ class Trainer:
     :param conf: configuration obtained using config_utils.get_conf_logger
     """
 
-    @flex_profile
     def __init__(self, model, loss, optimizer, data_train, data_test, conf):
 
         self.model = model
@@ -106,10 +106,10 @@ class Trainer:
         self._log.info("Model architecture: \n" + str(model))
 
         # init data sets
-        cuda_kwargs = {'num_workers': 1, 'pin_memory': True} if torch.cuda.is_available() else {}
+        cuda_kwargs = {'num_workers': 0, 'pin_memory': True} if torch.cuda.is_available() else {}
         kwargs = {**cuda_kwargs, 'train_max': 4, 'valid_max': 2} if conf.debug else cuda_kwargs
         kwargs = {**kwargs, "seed": conf.seed} if conf.seed else kwargs
-        self.train_loader, self.val_loader = get_train_valid_data(data_train, batch_size=conf.batch_size,
+        self.train_loader, self.val_loader = get_train_valid_data(data_train, valid_size=conf.valid_size, batch_size=conf.batch_size,
                                                                   drop_last=conf.drop_last,
                                                                   shuffle=conf.shuffle, **kwargs)
         self.test_loader = torch.utils.data.DataLoader(data_test, batch_size=conf.batch_size, drop_last=conf.drop_last,
@@ -160,18 +160,26 @@ class Trainer:
         # add events custom the events
         self._add_custom_events()
 
-        # add early stopping, use total loss over epoch.
+        # add early stopping, use total loss over epoch, stop if no improvement: higher score = better
         if conf.early_stop:
             early_stop_handler = EarlyStopping(patience=1,
-                                               score_function=lambda engine: engine.state.metrics["loss"],
+                                               score_function=lambda engine: -engine.state.metrics["loss"],
                                                trainer=self.train_engine)
             self.valid_engine.add_event_handler(Events.COMPLETED, early_stop_handler)
 
+        if conf.save_best:
+            best_score_handler = SaveBestScore(score_function=lambda engine: engine.state.metrics["acc"],
+                                               max_train_epochs=conf.epochs,
+                                               model_name=conf.model_name,
+                                               score_file_name=conf.score_file_name)
+            self.valid_engine.add_event_handler(Events.COMPLETED, best_score_handler)
+
         # saves models
-        save_handler = ModelCheckpoint(conf.trained_model_path, conf.model_name, save_interval=1,
-                                       n_saved=conf.n_saved,
-                                       create_dir=True, require_empty=False)
-        self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': model})
+        if conf.save_trained:
+            save_handler = ModelCheckpoint(conf.trained_model_path, conf.model_name, save_interval=1,
+                                           n_saved=conf.n_saved,
+                                           create_dir=True, require_empty=False)
+            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': model})
 
         # set epoch in state of train_engine to model epoch at start to resume training for loaded model.
         # Note: new models have epoch = 0.
@@ -227,6 +235,7 @@ class Trainer:
 class CapsuleTrainer(Trainer):
 
     @staticmethod
+    @flex_profile
     def _train_function(engine, trainer, batch):
         trainer.model.train()
         trainer.optimizer.zero_grad()
@@ -309,7 +318,6 @@ class CapsuleTrainer(Trainer):
 
         return test_dict
 
-    @flex_profile
     def _add_custom_events(self):
 
         if self.conf.sparsify == "nodes_threshold":
@@ -341,7 +349,7 @@ class CapsuleTrainer(Trainer):
         if self.conf.sparsify != "None":
             ValueEpochMetric(lambda x: x[self.conf.sparsify]["prob_entropy"]).attach(self.test_engine, "prob_h_sparse")
         prop_names = "prob_h" if self.conf.sparsify == "None" else ["prob_h", "prob_h_sparse"]
-        prop_legend = None if self.conf.sparsify == "None" else ["No sparse", self.conf.sparsify]
+        prop_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
         prop_entropy_plot = VisEpochPlotter(self.vis, prop_names, "H", "Entropy of the softmaxed logits", self.conf.model_name, prop_legend)
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, prop_entropy_plot)
 
@@ -353,7 +361,7 @@ class CapsuleTrainer(Trainer):
             ValueEpochMetric(lambda x: x[self.conf.sparsify]["stats"]["H_c_vec"][self.conf.routing_iters - 1]).attach(
                 self.test_engine, "h_rout_sparse")
         h_weight_names = "h_rout" if self.conf.sparsify == "None" else ["h_rout", "h_rout_sparse"]
-        h_weight_legend = None if self.conf.sparsify == "None" else ["No sparse", self.conf.sparsify]
+        h_weight_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
         h_weight_plot = VisEpochPlotter(self.vis, h_weight_names, "H", "Mean Weight Entropy", self.conf.model_name, h_weight_legend)
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, h_weight_plot)
 
@@ -361,15 +369,15 @@ class CapsuleTrainer(Trainer):
         if self.conf.sparsify != "None":
             ValueEpochMetric(lambda x: x[self.conf.sparsify]["acc"]).attach(self.test_engine, "acc_sparse")
         acc_weight_names = "acc" if self.conf.sparsify == "None" else ["acc", "acc_sparse"]
-        acc_weight_legend = None if self.conf.sparsify == "None" else ["No sparse", self.conf.sparsify]
+        acc_weight_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
         acc_weight_plot = VisEpochPlotter(self.vis, acc_weight_names, "acc", "Test Accuracy", self.conf.model_name, acc_weight_legend)
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_weight_plot)
 
 
         if self.conf.print_time:
-            TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
+            TimeMetric(lambda x: x["time"] * 1000).attach(self.train_engine, "time")
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
-                'Time per example: {:.4f} sec', "time"))
+                'Time per example: {:.6f} ms', "time"))
 
 
 class CNNTrainer(Trainer):

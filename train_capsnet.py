@@ -35,7 +35,7 @@ def custom_args(parser):
 
 
 def main():
-    conf, parser = get_conf(custom_args)
+    conf, parser = get_conf([custom_args])
     log = get_logger(__name__)
     log.info(parser.format_values())
     transform = transforms.ToTensor()
