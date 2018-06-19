@@ -31,6 +31,7 @@ class Architecture:
         assert 2 <= len(arch), "Architecture should have at least a primary and final layer."
 
         self.prim = ArchLayer(arch[0])
+        self.final = ArchLayer(arch[-1])
 
         self.layers = []
         for i in arch[1:]:
@@ -48,12 +49,9 @@ def capsule_arguments(config_file_name, path_root="."):
         parser.add_argument('--alpha', type=float, required=True, help="Alpha of CapsuleLoss")
         parser.add_argument('--m_plus', type=float, required=True, help="m_plus of margin loss")
         parser.add_argument('--m_min', type=float, required=True, help="m_min of margin loss")
-        parser.add_argument('--prim_caps', type=int, required=True, help="Number of primary capsules")
         parser.add_argument('--routing_iters', type=int, required=True,
                             help="Number of iterations in the routing algo.")
         parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
-        parser.add_argument('--squash_dim', type=int, required=True, help="")
-        parser.add_argument('--softmax_dim', type=int, required=True, help="")
         parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
         parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
         parser.add_argument('--excessive_testing', type=parse_bool, required=True,
@@ -61,8 +59,7 @@ def capsule_arguments(config_file_name, path_root="."):
         parser.add_argument('--sparse_threshold', type=float, required=True, help="Threshold of routing to sparsify.")
         parser.add_argument('--sparsify', type=str, required=True, help="The method used to sparsify the parse tree.")
         parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")
-        parser.add_argument('--hidden_capsules', type=int, required=True, help="Number of capsules in the hidden layer.")
-        parser.add_argument('--hidden_capsules', type=Architecture, required=True,
+        parser.add_argument('--architecture', type=Architecture, required=True,
                             help="Architecture of the capsule network. Notation: Example: 32,8;10,16")
 
         return parser
@@ -123,11 +120,11 @@ def general_arguments(path_root):
 
     # add configurations file
     if torch.cuda.is_available():
-        p.add('--general_config', is_config_file=True, default=f"{path_root}/configurations/general_cuda.conf",
+        p.add('--general_config', is_config_file=True, default=f"{path_root}/configurations/general.conf",
               help='configurations file path')
     else:
         # config file for local / non-cuda run
-        p.add('--general_config', is_config_file=True, default=f"{path_root}/configurations/general_local.conf",
+        p.add('--general_config', is_config_file=True, default=f"{path_root}/configurations/general.conf",
               help='configurations file path')
 
     # required arguments: specified in configurations file or in
@@ -146,6 +143,7 @@ def general_arguments(path_root):
     p.add_argument('--shuffle', type=parse_bool, required=True, help='Shuffle dataset')
     p.add_argument('--n_saved', type=int, required=True, help='Models are save every epoch. N_saved is length of this '
                                                               'history')
+    p.add_argument('--learning_rate', type=float, required=True, help='Learning rate of optimizer')
     p.add_argument('--early_stop', type=parse_bool, required=True, help='Early stopping on validation loss')
     p.add_argument('--cudnn_benchmark', type=parse_bool, required=True, help='Bool for cudnn benchmarking. Faster for large')
     p.add_argument('--use_visdom', type=parse_bool, required=True, help='Makes plot in visdom yes/no. Slows startup time.')

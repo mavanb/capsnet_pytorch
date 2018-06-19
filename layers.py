@@ -40,7 +40,6 @@ class DynamicRouting(nn.Module):
 
         b = u_hat.shape[0]
         self.i = u_hat.shape[2]
-        routing_stats = {}
 
         # todo: previously b_vec as only init once, but than the class must always have the same input shape
         # todo: it seems that init does not cost much time, so temporily do it this way
@@ -49,8 +48,8 @@ class DynamicRouting(nn.Module):
         self.b_vec = torch.zeros(b, self.j, self.i, device=get_device(), requires_grad=False)
         b_vec = self.b_vec
 
-        # track entropy of b_vec per iter
-        routing_stats["H_c_vec"] = {}
+        # track entropy of c_vec per iter
+        stats = []
 
         for index in range(iters):
 
@@ -58,8 +57,7 @@ class DynamicRouting(nn.Module):
             c_vec = self.soft_max(b_vec)
 
             # compute entropy of weight distribution of all capsules
-            # routing_stats["H_c_vec"][index] = calc_entropy(c_vec, dim=1).mean().item()
-            routing_stats["H_c_vec"][index] = 0
+            stats.append(calc_entropy(c_vec, dim=1).mean().item())
 
             # created unsquashed prediction for parents capsules by a weighted sum over the child predictions
             # in einsum: bij, bjin-> bjn
@@ -87,21 +85,21 @@ class DynamicRouting(nn.Module):
                                              v_vec.view(b, self.j, 1, self.n, 1)).view(b, self.j, self.i)
 
                 if self.sparsify == "nodes_threshold":
-                    b_vec, routing_stats = self.sparsify_nodes_threshold(b_vec, index, iters, routing_stats)
+                    b_vec = self.sparsify_nodes_threshold(b_vec, index, iters)
                 elif self.sparsify == "nodes_topk":
-                    b_vec, routing_stats = self.sparsify_nodes_topk(b_vec, index, iters, routing_stats)
+                    b_vec = self.sparsify_nodes_topk(b_vec, index, iters)
                 elif self.sparsify == "edges_threshold":
-                    b_vec, routing_stats = self.sparsify_edges_threshold(b_vec, index, iters)
+                    b_vec = self.sparsify_edges_threshold(b_vec, index, iters)
                 elif self.sparsify == "edges_topk":
-                    b_vec, routing_stats = self.sparsify_edges_topk(b_vec, index, iters, routing_stats)
+                    b_vec = self.sparsify_edges_topk(b_vec, index, iters)
                 elif self.sparsify == "edges_random":
-                    b_vec, routing_stats = self.sparsify_edges_random(b_vec, index, iters, routing_stats)
+                    b_vec = self.sparsify_edges_random(b_vec, index, iters)
 
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
-        return v_vec, routing_stats
+        return v_vec, stats
 
-    def sparsify_nodes_topk(self, b_vec, index, iters, routing_stats):
+    def sparsify_nodes_topk(self, b_vec, index, iters):
 
         current_mask_rato = self.sparse_topk[index]
 
@@ -136,9 +134,9 @@ class DynamicRouting(nn.Module):
             assert ((b_vec == float("-inf")).sum(dim=1) == self.j).nonzero().shape == torch.Size([0]), "Too many topk " \
                         "nodes are sparsified, all j cols are now -inf. Set sparse_topk lower."
 
-        return b_vec, routing_stats
+        return b_vec
 
-    def sparsify_edges_random(self, b_vec, index, iters, routing_stats):
+    def sparsify_edges_random(self, b_vec, index, iters):
         #todo| make sure that each column (child) has the same amount of masked elements. Requires shuffling, randperm
         #todo| works only in one dimension
 
@@ -165,9 +163,9 @@ class DynamicRouting(nn.Module):
             valid_mask = self.full_inf(b_vec, mask, method="no_mask")
             b_vec[valid_mask] = float("-inf")
 
-        return b_vec, routing_stats
+        return b_vec
 
-    def sparsify_edges_topk(self, b_vec, index, iters, routing_stats, resolve_full_inf="no_mask"):
+    def sparsify_edges_topk(self, b_vec, index, iters, resolve_full_inf="no_mask"):
 
         current_mask_rato = self.sparse_topk[index]
 
@@ -201,13 +199,12 @@ class DynamicRouting(nn.Module):
             # check full inf cols
             self.full_inf(b_vec, mask, method="raise")
 
-
             # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
             b_vec[mask] = float("-inf")
 
-        return b_vec, routing_stats
+        return b_vec
 
-    def sparsify_edges_topk_old(self, b_vec, index, iters, routing_stats, resolve_full_inf="no_mask"):
+    def sparsify_edges_topk_old(self, b_vec, index, iters, resolve_full_inf="no_mask"):
         """ In this sparsify edges topk implementation, the smallest edges of all edges in a layer are dropped.
         This means that for childs some more edges are than for others, potentially, all edges may be dropped.
         In the new implemention sparsify_edges_topk, we only drop columnwise (same amount per child capsule).
@@ -247,7 +244,7 @@ class DynamicRouting(nn.Module):
             # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
             b_vec[valid_mask] = float("-inf")
 
-        return b_vec, routing_stats
+        return b_vec
 
     def full_inf(self, b_vec, mask, method):
 
@@ -280,6 +277,8 @@ class DynamicRouting(nn.Module):
         elif method == "raise":
             if full_inf.sum() > 0:
                 raise ValueError("Sparsifying resulted in full inf column.")
+            else:
+                valid_mask = mask
         else:
             raise ValueError("Method to resolve full infinite j column does not exits.")
 
@@ -288,7 +287,7 @@ class DynamicRouting(nn.Module):
     def sparsify_edges_threshold(self, b_vec, index, iters):
         raise NotImplementedError
 
-    def sparsify_nodes_threshold(self, b_vec, index, iters, routing_stats):
+    def sparsify_nodes_threshold(self, b_vec, index, iters):
         """ Sparsify the nodes of the parse tree using a threshold on the incoming weights of the nodes.
         The threshold is compared against the incoming weights a node will have after taking the the
         softmax. Sparsify only at the last iteration. The resulting zero rows in c_vec make rows in s_vec zero, which
@@ -301,8 +300,7 @@ class DynamicRouting(nn.Module):
 
         Returns: (tuple): tuple containing:
                     arg1: (tensor) b_vec sparsified
-                    arg2: (dict) routing stats
-                    arg3: (tensor->tensor) callable to set v_vec completely to zero
+                    arg2: (tensor->tensor) callable to set v_vec completely to zero
         """
         # only sparsify on last update #todo: allow also on other iterations, avoid full j cols to be -inf though
         if index == (iters - 2):
@@ -344,11 +342,7 @@ class DynamicRouting(nn.Module):
             b = b_vec.shape[0]
             mask_rato = len(b_vec[b_vec == float("-inf")]) / (self.j * b * self.i)
 
-            routing_stats["mask_rato"] = mask_rato
-            routing_stats["avg_neg_devs"] = avg_neg_deviations.item()
-            routing_stats["max_neg_devs"] = max_neg_deviations.item()
-
-        return b_vec, routing_stats
+        return b_vec
 
 
 class LinearPrimaryLayer(nn.Module):

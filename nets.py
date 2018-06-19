@@ -123,79 +123,113 @@ class ToyCapsNet(_CapsNet):
 
 
 class BasicCapsNet(_CapsNet):
-    """ Implements a CapsNet based using the architecture described in Dynamic Routing Hinton 2017.
 
-    Input should be an image of shape: [batch_size, channels, width, height]
+    def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
+                 sparse_threshold, sparsify, sparse_topk, arch):
+        super().__init__(10) #todo remove, retrieve from data
 
-    Args:
-        in_channels (int): the number of channels in the input
-        digit_caps (int): the number of capsule in the final layer, the represent the output classes
-        prim_caps (int): the number of capsules in the primary layer
-        vec_len_prim (int): the dimensionality of the primary capsules
-        vec_len_digit (int): the dimensionality of the digit capsules
-        routing_iters (int): the number of iterations in the routing algorithm
-
-    Returns:
-        - class predictions of shape: [batch_size, num_classes/num_digit_caps]
-        - image reconstruction of shape: [batch_size, channels, width, height]
-    """
-
-    def __init__(self, in_channels, digit_caps, vec_len_prim, vec_len_digit, routing_iters, prim_caps, in_height,
-                 in_width, softmax_dim, squash_dim, stdev_W, bias_routing, sparse_threshold, sparsify, sparse_topk):
-        super().__init__(digit_caps)
-
+        self.arch = arch
         self.routing_iters = routing_iters
 
+        prim_caps = arch.prim.caps
+        prim_len = arch.prim.len
+
         # initial convolution
-        conv_channels = prim_caps * vec_len_prim
+        conv_channels = prim_caps * prim_len
         conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
-                               bias=True)
+                          bias=True)
         self.conv1 = init_weights(conv1)
         self.relu = nn.ReLU()
 
         # compute primary capsules
-        self.primary_caps_layer = Conv2dPrimaryLayer(in_channels=conv_channels, out_channels=prim_caps, vec_len=vec_len_prim,squash_dim=squash_dim )
+        self.primary_caps_layer = Conv2dPrimaryLayer(in_channels=conv_channels, out_channels=prim_caps,
+                                                     vec_len=prim_len)
 
         # grid of multiple primary caps channels is flattend, number of new channels: grid * point * channels in grid
-        new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
+        new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), kernel_size=9, stride=2)
         in_features_dense_layer = new_height * new_width * prim_caps
-        self.dense_caps_layer = DenseCapsuleLayer(in_features_dense_layer, digit_caps, vec_len_prim,
-                                                  vec_len_digit, stdev_W)
 
-        self.dynamic_routing = DynamicRouting(digit_caps, in_features_dense_layer, vec_len_digit, softmax_dim,
-                                              bias_routing, sparse_threshold, sparsify, sparse_topk)
+        # init list for all hidden parts
+        dense_layers = torch.nn.ModuleList()
+        rout_layers = torch.nn.ModuleList()
 
-        self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
+        # set input of first layer to the primary layer
+        in_caps = in_features_dense_layer
+        in_len = arch.prim.len
 
-        self.softmax_dim = softmax_dim
+        # loop over all other layers
+        for h in arch.layers:
+
+            # set capsules number and length to the current layer output
+            out_caps = h.caps
+            out_len = h.len
+
+            dense_layer = DenseCapsuleLayer(i=in_caps, j=out_caps, m=in_len, n=out_len, stdev=stdev_W)
+
+            rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing,
+                                        sparse_threshold=sparse_threshold, sparsify=sparsify, sparse_topk=sparse_topk)
+
+            # add all in right order to layer list
+            dense_layers.append(dense_layer)
+            rout_layers.append(rout_layer)
+
+            # capsules number and length to the next layer input
+            in_caps = out_caps
+            in_len = out_len
+
+        self.dense_layers = dense_layers
+        self.rout_layers = rout_layers
+
+        self.decoder = CapsNetDecoder(arch.final.len, arch.final.caps, in_channels, in_height, in_width)
 
     def set_sparsify(self, value):
         """ Set sparsify. Can, for example, be used to turn sparsify off during inference."""
-        self.dynamic_routing.sparsify = value
+        for dense_layer in self.dense_layers:
+            dense_layer.sparsify = value
 
+    @flex_profile
     def forward(self, x, t=None):
+
         # apply conv layer
         conv1 = self.relu(self.conv1(x))
 
         # compute grid of capsules
         primary_caps = self.primary_caps_layer(conv1)
 
+        # flatten primary capsules
         b, c, w, h, m = primary_caps.shape
-        primary_caps_flat = primary_caps.view(b, c*w*h, m)
+        primary_caps_flat = primary_caps.view(b, c * w * h, m)
 
-        # for each capsule in primary layer compute prediction for all next layer capsules
-        all_final_caps = self.dense_caps_layer(primary_caps_flat)
+        # set initial input of capsule part of the network
+        caps_input = primary_caps_flat
 
-        # compute digit capsules
-        # final_caps = self.dynamic_routing(all_final_caps, self.routing_iters, self.bias, softmax_dim=self.softmax_dim)
-        final_caps, stats = self.dynamic_routing(all_final_caps, self.routing_iters)
+        # list for all routing stats
+        entropy_list = []
 
+        # loop over the capsule layers
+        for dense_layer, rout_layer in zip(self.dense_layers, self.rout_layers):
+
+            # compute for each child a parent prediction
+            all_caps = dense_layer(caps_input)
+
+            # take weighted average of parent prediction, weights determined based on correspondence of predictions
+            caps_input, entropy_stats = rout_layer(all_caps, self.routing_iters)
+
+            entropy_list.append(entropy_stats)
+
+        # final capsule are the output of last layer
+        final_caps = caps_input
+
+        # compute the logits by taking the norm
         logits = self.compute_logits(final_caps)
 
+        # flatten final caps and mask all but target if known
         decoder_input = self.create_decoder_input(final_caps, t)
+
+        # create reconstruction
         recon = self.decoder(decoder_input)
 
-        return logits, recon, final_caps, stats
+        return logits, recon, final_caps, entropy_list
 
 
 class BaselineCNN(_Net):
@@ -203,7 +237,7 @@ class BaselineCNN(_Net):
     Convnet as implemented in https://github.com/Sarasra/models/blob/master/research/capsules/models/conv_model.py.
     The paper (Hinton 2017) mentions a slightly different architecture than in the source code.
     """
-    def __init__(self, classes, in_channels, in_height, in_width):
+    def __init__(self, clases, in_channels, in_height, in_width):
         super(BaselineCNN, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels, 512, kernel_size=5)

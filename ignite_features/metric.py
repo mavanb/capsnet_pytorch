@@ -3,7 +3,7 @@ from __future__ import division
 from ignite.exceptions import NotComputableError
 from ignite.metrics.metric import Metric
 from ignite.engines import Events
-
+import numpy as np
 
 class IterMetric(Metric):
     """ Abstract class of Metric that is computed and reset at the end of every iteration. """
@@ -35,6 +35,51 @@ class ValueEpochMetric(Metric):
 
 class ValueIterMetric(ValueEpochMetric, IterMetric):
     """ ValueMetric with is computed and reset at every iteration instead of epoch."""
+    pass
+
+
+class EntropyEpochMetric(Metric):
+
+    # entropy per layer per routing iter
+    # entropy average correct for size per routing iter
+
+    def __init__(self, output_transform, sizes, iters):
+
+        self.sizes = sizes
+        self.iters = iters
+        self.num_layers = len(sizes)
+
+        self._layers = np.zeros((self.num_layers, self.iters))
+        self._num_examples = 0
+
+        super().__init__(output_transform)
+
+    def reset(self):
+        self._layers.fill(0)
+        self._num_examples = 0
+
+    def update(self, entropy_values):
+
+        assert type(entropy_values) == list and type(entropy_values[0]) == list, "Entropy metrics expects list of list"
+
+        assert len(entropy_values) == self.num_layers, "The entropy values a have different size than the layers."
+
+        assert set([len(l) for l in entropy_values]) == {self.iters}
+
+        self._layers += np.asarray(entropy_values, dtype=float)
+        self._num_examples += 1.0
+
+    def compute(self):
+
+        layers = self._layers / self._num_examples
+
+        weights = np.asarray(self.sizes) / sum(self.sizes)
+        average = (layers * weights.reshape(-1, 1)).sum(axis=0)
+
+        return {"layers": layers, "avg": average}
+
+
+class EntropyIterMetric(EntropyEpochMetric, IterMetric):
     pass
 
 

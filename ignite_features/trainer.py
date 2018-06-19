@@ -8,7 +8,7 @@ import visdom
 from ignite.handlers import ModelCheckpoint, EarlyStopping
 from data.data_loader import get_train_valid_data
 from ignite.engines.engine import Events, Engine
-from ignite_features.metric import ValueEpochMetric, ValueIterMetric, TimeMetric
+from ignite_features.metric import ValueEpochMetric, ValueIterMetric, TimeMetric, EntropyEpochMetric
 from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
 from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
 from utils import get_device, flex_profile, get_logger, calc_entropy
@@ -243,7 +243,7 @@ class CapsuleTrainer(Trainer):
         data = batch[0].to(trainer.device)
         labels = batch[1].to(trainer.device)
 
-        class_probs, reconstruction, _, rout_stats = trainer.model(data, labels)
+        class_probs, reconstruction, _, entropy = trainer.model(data, labels)
 
         total_loss, margin_loss, recon_loss = trainer.loss(data, labels, class_probs, reconstruction)
 
@@ -252,8 +252,8 @@ class CapsuleTrainer(Trainer):
         total_loss.backward()
         trainer.optimizer.step()
 
-        return {"loss": total_loss.item(), "time": (time.time(), data.shape[0]), "acc": acc.item(), "rout_stats":
-            rout_stats}
+        return {"loss": total_loss.item(), "time": (time.time(), data.shape[0]), "acc": acc.item(), "entropy":
+            entropy}
 
     @staticmethod
     def _valid_function(engine, trainer, batch):
@@ -263,13 +263,13 @@ class CapsuleTrainer(Trainer):
             data = batch[0].to(trainer.device)
             labels = batch[1].to(trainer.device)
 
-            class_probs, reconstruction, _, rout_stats = trainer.model(data)
+            class_probs, reconstruction, _, entropy = trainer.model(data)
             total_loss, _, _ = trainer.loss(data, labels, class_probs, reconstruction)
 
             acc = trainer.model.compute_acc(class_probs, labels)
 
-        return {"loss": total_loss.item(), "acc": acc.item(), "epoch": trainer.model.epoch, "rout_stats":
-            rout_stats}
+        return {"loss": total_loss.item(), "acc": acc.item(), "epoch": trainer.model.epoch, "entropy":
+            entropy}
 
     @staticmethod
     def _test_function(engine, trainer, batch):
@@ -289,28 +289,28 @@ class CapsuleTrainer(Trainer):
 
             model.set_sparsify("None")
 
-            logits, recon, caps, stats = model(data)
+            logits, recon, caps, entropy = model(data)
             acc = model.compute_acc(logits, labels)
             probs = model.compute_probs(logits)
             prob_entropy = calc_entropy(probs, dim=1).mean().item()
 
             test_dict["None"] = {}
             test_dict["None"]["acc"] = acc.item()
-            test_dict["None"]["stats"] = stats
+            test_dict["None"]["entropy"] = entropy
             test_dict["None"]["prob_entropy"] = prob_entropy
 
             if train_sparsify != "None":
 
                 model.set_sparsify(train_sparsify)
 
-                logits, recon, caps, stats = model(data)
+                logits, recon, caps, entropy = model(data)
                 acc = model.compute_acc(logits, labels)
                 probs = model.compute_probs(logits)
                 prob_entropy = calc_entropy(probs, dim=1).mean().item()
 
                 test_dict[train_sparsify] = {}
                 test_dict[train_sparsify]["acc"] = acc.item()
-                test_dict[train_sparsify]["stats"] = stats
+                test_dict[train_sparsify]["entropy"] = entropy
                 test_dict[train_sparsify]["prob_entropy"] = prob_entropy
 
         # set sparsity back to original setting
@@ -320,28 +320,18 @@ class CapsuleTrainer(Trainer):
 
     def _add_custom_events(self):
 
-        if self.conf.sparsify == "nodes_threshold":
-            # tracking mask per iter
-            ValueIterMetric(lambda x: x["rout_stats"]["mask_rato"]).attach(self.train_engine, "mask_rato")
-
-            # plot per iter
-            mask_rato_plot = VisIterPlotter(self.vis, "mask_rato", "Ratio", "Mask Ratio per iteration")
-            self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, mask_rato_plot)
-
-        # callable to get entropy of routing iter
-        get_h = lambda iter: lambda x: x["rout_stats"]["H_c_vec"][iter]
 
         # Add entropy metric and plots for each routing iter
         # skip first routing iter, because entropy uniform anyways
-        def get_entropy_names(i):
-            entropy_name = f"h_rout_{i}"
-            ValueIterMetric(get_h(i)).attach(self.train_engine, entropy_name)
-            return entropy_name
+        # def get_entropy_names(i):
+        #     entropy_name = f"h_rout_{i}"
+        #     ValueIterMetric(get_h(i)).attach(self.train_engine, entropy_name)
+        #     return entropy_name
 
-        entropy_metric_names = [get_entropy_names(i) for i in range(1, self.conf.routing_iters)]
-
-        train_entropy_plot = VisIterPlotter(self.vis, entropy_metric_names, "H", "Train entropy", entropy_metric_names)
-        self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, train_entropy_plot)
+        # entropy_metric_names = [get_entropy_names(i) for i in range(1, self.conf.routing_iters)]
+        #
+        # train_entropy_plot = VisIterPlotter(self.vis, entropy_metric_names, "H", "Train entropy", entropy_metric_names)
+        # self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, train_entropy_plot)
 
         # Add metric and plots to track the entropy of the logits
         # if sparsity method is used, plot both with and without using this method on inference
@@ -356,14 +346,19 @@ class CapsuleTrainer(Trainer):
         # Add metric and plots to track the mean entropy of the weights after routing
         # if sparsity method is used, plot both with and without using this method on inference
         # plot the entropy at the last routing iteration, the last index is routing_iters-1
-        ValueEpochMetric(lambda x: x["None"]["stats"]["H_c_vec"][self.conf.routing_iters - 1]).attach(self.test_engine, "h_rout")
+
+        caps_sizes = [l.caps for l in self.model.arch.layers]
+        EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
+                           self.conf.routing_iters).attach(self.test_engine, "entropy")
         if self.conf.sparsify != "None":
-            ValueEpochMetric(lambda x: x[self.conf.sparsify]["stats"]["H_c_vec"][self.conf.routing_iters - 1]).attach(
-                self.test_engine, "h_rout_sparse")
-        h_weight_names = "h_rout" if self.conf.sparsify == "None" else ["h_rout", "h_rout_sparse"]
-        h_weight_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
-        h_weight_plot = VisEpochPlotter(self.vis, h_weight_names, "H", "Mean Weight Entropy", self.conf.model_name, h_weight_legend)
-        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, h_weight_plot)
+            EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
+                               self.conf.routing_iters).attach(self.test_engine, "entropy_sparse")
+
+        h_names = "entropy" if self.conf.sparsify == "None" else ["entropy", "entropy_sparse"]
+        h_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
+        h_plot = VisEpochPlotter(self.vis, h_names, "H", "Mean Weight Entropy", self.conf.model_name, h_legend,
+                                 lambda h: h["avg"][-1])
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, h_plot)
 
         ValueEpochMetric(lambda x: x["None"]["acc"]).attach(self.test_engine, "acc")
         if self.conf.sparsify != "None":
@@ -372,7 +367,6 @@ class CapsuleTrainer(Trainer):
         acc_weight_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
         acc_weight_plot = VisEpochPlotter(self.vis, acc_weight_names, "acc", "Test Accuracy", self.conf.model_name, acc_weight_legend)
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_weight_plot)
-
 
         if self.conf.print_time:
             TimeMetric(lambda x: x["time"] * 1000).attach(self.train_engine, "time")
