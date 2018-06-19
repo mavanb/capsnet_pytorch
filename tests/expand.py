@@ -100,5 +100,5 @@ for expand in [False, True]:
                 acc_list.append(acc.item())
 
     print(f"\nTrain time: {np.asarray(time_list).sum()/runs:0.4f}")
-    print(f"Acc test set: {np.asarray(acc_list).mean():0.4f}")
+    print(f"Acc tests set: {np.asarray(acc_list).mean():0.4f}")
 

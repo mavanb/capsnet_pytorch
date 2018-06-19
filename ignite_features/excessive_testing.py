@@ -1,5 +1,5 @@
 """
-Excessive testing is used for tests on the test set that can only be performed on during traing. This avoids
+Excessive testing is used for tests on the tests set that can only be performed on during traing. This avoids
 have to save all models. This module is not meant for normal testing.
 """
 
@@ -20,7 +20,7 @@ def test_routing_iters_handler(routing_test_iters, vis, test_loader, conf):
     value_Y_init = np.column_stack([np.nan for _ in value_names])
 
     win_acc = vis.line(X=value_X_init, Y=value_Y_init, name=value_names,
-                               opts=dict(xlabel='Epoch', ylabel='acc', title='Accuracy on test set',
+                               opts=dict(xlabel='Epoch', ylabel='acc', title='Accuracy on tests set',
                                          legend=value_legend))
 
     # diff_names = [str(i + 1) for i in range(routing_test_iters -1)]

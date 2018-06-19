@@ -14,9 +14,9 @@ class TestModel(nn.Module):
     def __init__(self, num_childs, num_parents, len_in, len_out, sparsify, sparse_topk):
         super().__init__()
 
-        self.dense_layer = DenseCapsuleLayer(in_capsules=num_childs, out_capsules=num_parents,
-                                        vec_len_in=len_in, vec_len_out=len_out,
-                                        stdev=0.1)
+        self.dense_layer = DenseCapsuleLayer(i=num_childs, j=num_parents,
+                                             m=len_in, n=len_out,
+                                             stdev=0.1)
 
         self.routing_layer = DynamicRouting(j=num_parents, i=num_childs, n=len_out, softmax_dim=1,
                                        bias_routing=True, sparse_threshold=0.99,
@@ -143,9 +143,9 @@ class TimeClocker:
 
         Returns: (tensor) Sparse data of shape bim
         """
-        dense = DenseCapsuleLayer(in_capsules=data.shape[1], out_capsules=data.shape[1],
-                                        vec_len_in=data.shape[2], vec_len_out=data.shape[2],
-                                        stdev=0.1).to(get_device())
+        dense = DenseCapsuleLayer(i=data.shape[1], j=data.shape[1],
+                                  m=data.shape[2], n=data.shape[2],
+                                  stdev=0.1).to(get_device())
 
         rout = DynamicRouting(j=data.shape[1], i=data.shape[1], n=data.shape[2], softmax_dim=1,
                               bias_routing=True, sparse_threshold=0.99,

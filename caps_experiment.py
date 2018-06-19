@@ -17,15 +17,17 @@ from utils import get_logger, flex_profile
 
 class DoubleCapsNet(_CapsNet):
 
-    def __init__(self, in_channels, digit_caps, vec_len_prim, vec_len_digit, routing_iters, prim_caps, in_height,
-                 in_width, softmax_dim, squash_dim, stdev_W, bias_routing, sparse_threshold, sparsify, sparse_topk,
-                 hidden_capsules):
-        super().__init__(digit_caps)
+    def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
+                 sparse_threshold, sparsify, sparse_topk, arch):
+        super().__init__(10) #todo remove, retrieve from data
+
+        prim_caps = arch.prim.caps
+        prim_len = arch.prim.len
 
         self.routing_iters = routing_iters
 
         # initial convolution
-        conv_channels = prim_caps * vec_len_prim
+        conv_channels = prim_caps * prim_len
         conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv_channels, kernel_size=9, stride=1, padding=0,
                           bias=True)
         self.conv1 = init_weights(conv1)
@@ -33,37 +35,51 @@ class DoubleCapsNet(_CapsNet):
 
         # compute primary capsules
         self.primary_caps_layer = Conv2dPrimaryLayer(in_channels=conv_channels, out_channels=prim_caps,
-                                                     vec_len=vec_len_prim, squash_dim=squash_dim)
+                                                     vec_len=prim_len)
 
         # grid of multiple primary caps channels is flattend, number of new channels: grid * point * channels in grid
-        new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
+        new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), kernel_size=9, stride=2)
         in_features_dense_layer = new_height * new_width * prim_caps
 
-        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=hidden_capsules,
-                                                   vec_len_in=vec_len_prim, vec_len_out=vec_len_digit,
-                                                   stdev=stdev_W)
+        # init list for all hidden parts
+        layers = []
 
-        self.dynamic_routing1 = DynamicRouting(j=hidden_capsules, i=in_features_dense_layer, n=vec_len_digit, softmax_dim=softmax_dim,
-                                               bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify, sparse_topk=sparse_topk)
+        # set input of first layer to the primary layer
+        in_caps = in_features_dense_layer
+        in_len = arch.prim.len
 
-        ## Dynamic routing only selects a rows
+        # loop over all other layers
+        for h in arch.layers:
 
-        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=hidden_capsules, out_capsules=digit_caps,
-                                                   vec_len_in=vec_len_digit, vec_len_out=vec_len_digit,
-                                                    stdev=stdev_W)
+            # set capsules number and length to the current layer output
+            out_caps = h.caps
+            out_len = h.len
 
-        self.dynamic_routing2 = DynamicRouting(j=digit_caps, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,
-                                               bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify, sparse_topk=sparse_topk)
+            dense_layer = DenseCapsuleLayer(i=in_caps, j=out_caps, m=in_len, n=out_len, stdev=stdev_W)
 
-        self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
+            rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing,
+                                        sparse_threshold=sparse_threshold, sparsify=sparsify, sparse_topk=sparse_topk)
 
-        self.softmax_dim = softmax_dim
+            # add all in right order to layer list
+            layers.append(dense_layer)
+            layers.append(rout_layer)
+
+            # capsules number and length to the next layer input
+            in_caps = out_caps
+            in_len = out_len
+
+        # self.caps_part = nn.Sequential(
+        #     *layers,
+        # ) #todo, check how to solve stats return problm
+        self.caps_part = layers
+
+        self.decoder = CapsNetDecoder(arch.final.len, arch.final.caps, in_channels, in_height, in_width)
+
 
     def set_sparsify(self, value):
         """ Set sparsify. Can, for example, be used to turn sparsify off during inference."""
         self.dynamic_routing1.sparsify = value
+        #todo fix this for all routing layers
 
     @flex_profile
     def forward(self, x, t=None):
@@ -123,16 +139,16 @@ class LongCapsNet(_CapsNet):
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
 
-        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=hidden_capsules,
-                                                   vec_len_in=vec_len_prim, vec_len_out=vec_len_digit,                                                    stdev=stdev_W)
+        self.dense_caps_layer1 = DenseCapsuleLayer(i=in_features_dense_layer, j=hidden_capsules,
+                                                   m=vec_len_prim, n=vec_len_digit, stdev=stdev_W)
 
         self.dynamic_routing1 = DynamicRouting(j=hidden_capsules, i=in_features_dense_layer, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
                                                sparsify=sparsify, sparse_topk=sparse_topk)
 
-        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=hidden_capsules, out_capsules=hidden_capsules,
-                                                   vec_len_in=vec_len_digit, vec_len_out=vec_len_digit,
-                                                     stdev=stdev_W)
+        self.dense_caps_layer2 = DenseCapsuleLayer(i=hidden_capsules, j=hidden_capsules,
+                                                   m=vec_len_digit, n=vec_len_digit,
+                                                   stdev=stdev_W)
 
         self.dynamic_routing2 = DynamicRouting(j=hidden_capsules, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
@@ -165,9 +181,9 @@ class LongCapsNet(_CapsNet):
         #                                        bias_routing=bias_routing, sparse_threshold=sparse_threshold,
         #                                        sparsify=sparsify, sparse_topk=sparse_topk)
 
-        self.dense_caps_layer6 = DenseCapsuleLayer(in_capsules=hidden_capsules, out_capsules=digit_caps,
-                                                   vec_len_in=vec_len_digit, vec_len_out=vec_len_digit,
-                                                      stdev=stdev_W)
+        self.dense_caps_layer6 = DenseCapsuleLayer(i=hidden_capsules, j=digit_caps,
+                                                   m=vec_len_digit, n=vec_len_digit,
+                                                   stdev=stdev_W)
 
         self.dynamic_routing6 = DynamicRouting(j=digit_caps, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
@@ -192,7 +208,7 @@ class LongCapsNet(_CapsNet):
         b, c, w, h, m = primary_caps.shape
         primary_caps_flat = primary_caps.view(b, c * w * h, m)
 
-        ### test extra layer
+        ### tests extra layer
         all_caps = self.dense_caps_layer1(primary_caps_flat)
         caps, _ = self.dynamic_routing1(all_caps, self.routing_iters)
 

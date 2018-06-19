@@ -16,6 +16,27 @@ def parse_bool(v):
         raise configargparse.ArgumentTypeError('Boolean value expected.')
 
 
+class ArchLayer:
+    def __init__(self, layer_str):
+        l = [int(e) for e in layer_str.split(",")]
+        assert len(l)==2, "Each layer should have two ints seperatated by a komma."
+        self.caps = l[0]
+        self.len = l[1]
+
+
+class Architecture:
+    def __init__(self, arch_str):
+
+        arch = arch_str.split(";")
+        assert 2 <= len(arch), "Architecture should have at least a primary and final layer."
+
+        self.prim = ArchLayer(arch[0])
+
+        self.layers = []
+        for i in arch[1:]:
+            self.layers.append(ArchLayer(i))
+
+
 def capsule_arguments(config_file_name, path_root="."):
     """ Adds all arguments used by a capsule network.
     """
@@ -36,11 +57,14 @@ def capsule_arguments(config_file_name, path_root="."):
         parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
         parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
         parser.add_argument('--excessive_testing', type=parse_bool, required=True,
-                            help="Do excessive tests on test set")
+                            help="Do excessive tests on tests set")
         parser.add_argument('--sparse_threshold', type=float, required=True, help="Threshold of routing to sparsify.")
         parser.add_argument('--sparsify', type=str, required=True, help="The method used to sparsify the parse tree.")
         parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")
         parser.add_argument('--hidden_capsules', type=int, required=True, help="Number of capsules in the hidden layer.")
+        parser.add_argument('--hidden_capsules', type=Architecture, required=True,
+                            help="Architecture of the capsule network. Notation: Example: 32,8;10,16")
+
         return parser
     return custom_args
 

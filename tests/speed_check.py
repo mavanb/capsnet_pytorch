@@ -51,23 +51,23 @@ class TripleOrDoubleCapsNet(_CapsNet):
         new_height, new_width = new_grid_size(new_grid_size((in_height, in_width), kernel_size=9), 9, 2)
         in_features_dense_layer = new_height * new_width * prim_caps
 
-        self.dense_caps_layer1 = DenseCapsuleLayer(in_capsules=in_features_dense_layer, out_capsules=hidden_capsules,
-                                                   vec_len_in=vec_len_prim, vec_len_out=vec_len_digit,                                                    stdev=stdev_W)
+        self.dense_caps_layer1 = DenseCapsuleLayer(i=in_features_dense_layer, j=hidden_capsules,
+                                                   m=vec_len_prim, n=vec_len_digit, stdev=stdev_W)
 
         self.dynamic_routing1 = DynamicRouting(j=hidden_capsules, i=in_features_dense_layer, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
                                                sparsify=sparsify, sparse_topk=sparse_topk)
 
-        self.dense_caps_layer2 = DenseCapsuleLayer(in_capsules=hidden_capsules, out_capsules=hidden_capsules,
-                                                   vec_len_in=vec_len_digit, vec_len_out=vec_len_digit,
-                                                     stdev=stdev_W)
+        self.dense_caps_layer2 = DenseCapsuleLayer(i=hidden_capsules, j=hidden_capsules,
+                                                   m=vec_len_digit, n=vec_len_digit,
+                                                   stdev=stdev_W)
 
         self.dynamic_routing2 = DynamicRouting(j=hidden_capsules, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
                                                sparsify=sparsify, sparse_topk=sparse_topk)
 
-        self.dense_caps_layer3 = DenseCapsuleLayer(in_capsules=hidden_capsules, out_capsules=digit_caps,
-                                                   vec_len_in=vec_len_digit, vec_len_out=vec_len_digit,
+        self.dense_caps_layer3 = DenseCapsuleLayer(i=hidden_capsules, j=digit_caps,
+                                                   m=vec_len_digit, n=vec_len_digit,
                                                    stdev=stdev_W)
 
         self.dynamic_routing3 = DynamicRouting(j=digit_caps, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,

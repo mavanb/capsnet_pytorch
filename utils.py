@@ -21,7 +21,6 @@ def flex_profile(func):
         pass
     return func
 
-
 def new_grid_size(grid, kernel_size, stride=1, padding=0):
     """ Calculate new images size after convoling.
     Used formula from: https://adeshpande3.github.io/A-Beginner%27s-Guide-To-Understanding-Convolutional-Neural-

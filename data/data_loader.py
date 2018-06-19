@@ -14,7 +14,7 @@ from torchvision.transforms import Compose, Resize, RandomCrop, ToTensor, ColorJ
 def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffle=True, num_workers=4,
                          pin_memory=False, train_max=None, valid_max=None, drop_last=False):
     """
-    Utility function for loading and returning train, valid and test data.
+    Utility function for loading and returning train, valid and tests data.
     If using CUDA, num_workers should be set to 1 and pin_memory to True.
 
     Params
@@ -98,7 +98,7 @@ def get_dataset(dataset_name, transform=ToTensor()):
     else:
         raise ValueError("Name dataset does not exists.")
 
-    # check if shape of data instances is the same in test and train
+    # check if shape of data instances is the same in tests and train
     assert data_train[0][0].shape == data_test[0][0].shape
     data_shape = data_train[0][0].shape
 

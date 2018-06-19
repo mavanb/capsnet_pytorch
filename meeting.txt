@@ -1,0 +1,76 @@
+
+
+1. objective: more specialisation capsules networks
+
+2. measure by some entropy measure in some way
+
+- specialization in routing weights 
+sums to one, so we could use entropy 
+
+
+- specialization in activations (current plots of logits differences)
+-> doesn't make to much sense  
+
+
+3. see whether enforcing sparsity increases specialization
+
+afterwards: childs are being excluded
+- sparsity of nodes (currently)
+- sparsify the edges  
+idea sparsity in the next layer
+
+
+before/predicted (seperate network)
+- sparsity of nodes 
+- sparsify the edges 
+for later
+
+
+4. see effect on acc or generalization. 
+
+- try sparsity generalizaton: affMNIST 
+
+- looking at the effect of sparsity on the acc if the amount of hidden capsules layers increases wrt the same network without sparsity
+
+
+
+- Maybe try the computation advantage idea on selecting the top k (or 1). Deeper network seems to be better: the fasion MNIst with the 100, 50 architecture on triple: 91% validation acc. Time per example: 0.0316 sec. 
+- Try sparse matrices of pytorch: https://discuss.pytorch.org/t/3d-sparse-batch-tensors-with-the-same-sparsity-pattern/2806 -> hybrid sparse, first dims are sparse
+
+DONE: 
+- fixed slow loading 
+- check why sparsify nodes does not work in basic capsnet in recent code  (works in backup)
+- check why entropy the same at iters
+- random sparsify: edges
+- Recheck random 
+- fix test acc
+- plot: acc on test set for multiple epochs multiple 
+
+TODO: 
+
+
+Experiments: 
+
+10 epochs 
+
+Double CapsNet: 
+non sparse
+edges random: 0.1;0.3
+edges topk: 0.1;0.3
+
+MNIST, FashionMNIST, CIFAR10
+
+- save config to file with model name 	
+- create environment with model name
+
+
+
+
+
+TODO:
+- fast capsule networks 
+- settings, threshold on every iter possible
+- generalizations: affMNIST, equivariance test:  https://www.cs.toronto.edu/~tijmen/affNIST/32x/transformed/
+
+
+            

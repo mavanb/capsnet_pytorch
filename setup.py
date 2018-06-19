@@ -14,9 +14,9 @@ Example local:
 Example das4:
     python setup.py install --torch_source True --folder "/var/scratch/blokland"
 
-To test if the packages are succesfully isntalled run:
+To tests if the packages are succesfully isntalled run:
 
-python setup.py test
+python setup.py tests
 
 """
 import os
@@ -25,10 +25,10 @@ import time
 
 parser = argparse.ArgumentParser()
 
-subparsers = parser.add_subparsers(help='use test or install mode')
+subparsers = parser.add_subparsers(help='use tests or install mode')
 
-parser_test = subparsers.add_parser('test', help='test whether all packages are installed successfully')
-parser_test.set_defaults(cmd='test')
+parser_test = subparsers.add_parser('tests', help='tests whether all packages are installed successfully')
+parser_test.set_defaults(cmd='tests')
 
 parser_install = subparsers.add_parser('install', help='install all required packages')
 parser_install.add_argument('--update_torch', type=bool, default=False, help='')
@@ -41,8 +41,8 @@ parser_install.set_defaults(cmd='install')
 config = parser.parse_args()
 
 
-if config.cmd is "test":
-    # test all packages:
+if config.cmd is "tests":
+    # tests all packages:
     try:
         import torch
         import torchvision.datasets.smallnorb

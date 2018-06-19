@@ -5,12 +5,14 @@ from utils import squash, init_weights, flex_profile, get_device, calc_entropy, 
 
 class DynamicRouting(nn.Module):
 
-    def __init__(self, j, i, n, softmax_dim, bias_routing, sparse_threshold, sparsify, sparse_topk):
+    def __init__(self, j, n, bias_routing, sparse_threshold, sparsify, sparse_topk):
         super().__init__()
-        self.soft_max = torch.nn.Softmax(dim=softmax_dim)
+        self.soft_max = torch.nn.Softmax(dim=1)
         self.j = j
-        # self.i = i
         self.n = n
+
+        # number of input capsules is not required to know on init, thus determined dynamically
+        self.i = None
 
         # init depends on batch_size which depends on input size, declare dynamically in forward. see:
         # https://discuss.pytorch.org/t/dynamic-parameter-declaration-in-forward-function/427/2
@@ -364,7 +366,7 @@ class LinearPrimaryLayer(nn.Module):
 
 class Conv2dPrimaryLayer(nn.Module):
 
-    def __init__(self, in_channels, out_channels, vec_len, squash_dim=2):
+    def __init__(self, in_channels, out_channels, vec_len):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -374,7 +376,6 @@ class Conv2dPrimaryLayer(nn.Module):
                               bias=True)
         self.conv = init_weights(conv)
 
-        self.squash_dim = squash_dim
 
     def forward(self, input):
         """
@@ -386,20 +387,21 @@ class Conv2dPrimaryLayer(nn.Module):
         caps_raw = features.contiguous().view(-1, self.out_channels, self.vector_length, h, w)      # [b, c, vec, h, w]
         caps_raw = caps_raw.permute(0, 1, 3, 4, 2)  # [b, c, h, w, vec]
 
-        return squash(caps_raw, dim=self.squash_dim)
+        # squash on the vector dimension
+        return squash(caps_raw, dim=2)
 
 
 class DenseCapsuleLayer(nn.Module):
 
-    def __init__(self, in_capsules, out_capsules, vec_len_in, vec_len_out, stdev):
+    def __init__(self, i, j, m, n, stdev):
         super(DenseCapsuleLayer, self).__init__()
 
-        self.i = in_capsules
-        self.j = out_capsules
-        self.m = vec_len_in
-        self.n = vec_len_out
+        self.i = i
+        self.j = j
+        self.m = m
+        self.n = n
 
-        self.W = nn.Parameter(stdev * torch.randn(1, out_capsules, in_capsules, vec_len_out, vec_len_in))
+        self.W = nn.Parameter(stdev * torch.randn(1, j, i, n, m))
 
     def forward(self, input):
         b,i,m = input.shape

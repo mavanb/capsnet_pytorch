@@ -27,7 +27,7 @@ def custom_args(parser):
     parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
     parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
     parser.add_argument('--excessive_testing', type=parse_bool, required=True,
-                        help="Do excessive tests on test set")
+                        help="Do excessive tests on tests set")
     parser.add_argument('--sparse_threshold', type=float, required=True, help="Threshold of routing to sparsify.")
     parser.add_argument('--sparsify', type=str, required=True, help="The method used to sparsify the parse tree.")
     parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")

@@ -1,0 +1,79 @@
+
+
+* Entropy of weights: 
+
+- Don't use sparsity on during test time, else the lower entropy doesn't say anything 
+- max entropy is 3.3
+- entropy decreases over time. 
+- without sparsifying on test time entropy still lower, however also holds for random
+- strangly: random has lowest entropy on test time. Possible explanation: it performance justs worse 
+
+* Test Acc: Comparing sparsity methods 
+- sparsifying yes/no on inference does not make big difference
+- Random performances worse, the rest about the same. Maybe not sparse a little better (maybe, network not complex enough)
+
+
+* Using less data
+
+- sparse does not work better with less data. No difference really. 
+
+
+* More complex network 
+ 
+Maybe network not complex enough to see benefits of specialized network. 
+
+- more hidden capsules: low batch size, still running
+
+- more hidden layers:  super low, low batch size
+
+- idea: try if faster and more memory efficient when using nodes_topk and slice W		
+-> not more memory efficient (whole modell in network)
+
+Done: 
+Performance increase in slicing. 
+Make sure that Sparsify edges sparsifies same amount per child
+
+TODO: 
+
+Edges should not sample completely random, but per capsules that sums to one. 
+> hard to do
+
+Calculate entropy NOT taking the mean seperatly per layer. --> bias
+
+Try removing the reconstruction and rerun one of the experiments.
+
+Try Random Nodes with quite high rato to see if still entropy lower ->>
+
+Try more hidden layers by decrease the amount of primary capsules. Increasing the layers only has a linear effect on the memory. 
+
+Instead of plots, just use early stopping to select per run the best model. 
+
+Add Entropy to the loss function for both layers. Use the validation set to determine the scaling factor. 
+
+Maybe try this sampling idea, but first see if aggresive sparsifying edges works. Uncertainty is a side product advantage of sampling
+
+
+
+
+Experiments: 
+
+* No reconstruction 
+* More hidden layers. 
+* Entropy in loss functions
+* Super aggressive sampling
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
