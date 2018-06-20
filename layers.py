@@ -75,6 +75,7 @@ class DynamicRouting(nn.Module):
                 s_vec_bias[reset_mask, :] = 0
             else:
                 s_vec_bias = s_vec
+
             v_vec = squash(s_vec_bias)
 
             if index < (iters - 1):  # skip update last iter
@@ -181,8 +182,8 @@ class DynamicRouting(nn.Module):
             # issues/2134). Instead, we take the max of topk (is largest excluded value).
 
             # set prev -inf to inf to ignore them
-            # prev_inf_mask = b_vec == float("-inf")
-            # b_vec[prev_inf_mask] = float("inf")
+            prev_inf_mask = b_vec == float("-inf")
+            b_vec[prev_inf_mask] = float("inf")
 
             # take bottomk smallest values
             val, _ = torch.topk(b_vec, mask_count, largest=False, sorted=False, dim=1)
@@ -194,10 +195,10 @@ class DynamicRouting(nn.Module):
             mask = torch.le(b_vec, kthvalues)
 
             # set prev -inf back
-            # b_vec[prev_inf_mask] = float("-inf")
+            b_vec[prev_inf_mask] = float("-inf")
 
             # check full inf cols
-            # self.full_inf(b_vec, mask, method="raise")
+            self.full_inf(b_vec, mask, method="raise")
 
             # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
             b_vec[mask] = float("-inf")

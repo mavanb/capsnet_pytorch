@@ -193,6 +193,11 @@ class Trainer:
         def call_valid(_):
             self.valid_engine.run(self.val_loader)
 
+        @self.train_engine.on(Events.ITERATION_COMPLETED)
+        def check_nan(_):
+            assert all([torch.isnan(p).nonzero().shape == torch.Size([0]) for p in model.parameters()]), \
+                "Parameters contain NaNs. Occurred in this iteration."
+
         # makes sure test_engine is started after train epoch, should be after all custom valid_engine epoch_completed
         # events
         @self.valid_engine.on(Events.EPOCH_COMPLETED)
@@ -351,12 +356,12 @@ class CapsuleTrainer(Trainer):
         EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
                            self.conf.routing_iters).attach(self.test_engine, "entropy")
         if self.conf.sparsify != "None":
-            EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
+            EntropyEpochMetric(lambda x: x[self.conf.sparsify]["entropy"], caps_sizes,
                                self.conf.routing_iters).attach(self.test_engine, "entropy_sparse")
 
         h_names = "entropy" if self.conf.sparsify == "None" else ["entropy", "entropy_sparse"]
         h_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
-        h_plot = VisEpochPlotter(self.vis, h_names, "H", "Mean Weight Entropy", self.conf.model_name, h_legend,
+        h_plot = VisEpochPlotter(self.vis, h_names, "H", "Average Entropy (after routing)", self.conf.model_name, h_legend,
                                  lambda h: h["avg"][-1])
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, h_plot)
 

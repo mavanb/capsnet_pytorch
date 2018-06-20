@@ -2,7 +2,6 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer, DynamicRouting
-from working_routing import DynamicRoutingOld
 from utils import one_hot, new_grid_size, padding_same_tf, init_weights, flex_profile
 import torch.nn.functional as F
 from torch.nn.modules.module import _addindent
@@ -56,10 +55,12 @@ class _CapsNet(_Net):
     @staticmethod
     def compute_logits(caps):
         """ Compute class logits from the capsule/vector length.
+        Norm is safe, to avoid nan's.
+
         :param caps: capsules of shape [batch_size, num_capsules, dim_capsules]
         :returns logits of shape [batch_size, num_capsules]
         """
-        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False))
+        return torch.sqrt((caps ** 2).sum(dim=-1, keepdim=False) + 1e-9)
 
     @staticmethod
     def compute_probs(logits):
@@ -188,8 +189,8 @@ class BasicCapsNet(_CapsNet):
 
     def set_sparsify(self, value):
         """ Set sparsify. Can, for example, be used to turn sparsify off during inference."""
-        for dense_layer in self.dense_layers:
-            dense_layer.sparsify = value
+        for rout_layer in self.rout_layers:
+            rout_layer.sparsify = value
 
     @flex_profile
     def forward(self, x, t=None):

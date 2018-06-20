@@ -37,5 +37,5 @@ class SaveBestScore:
             self._logger.info("Save best score to file")
 
             with open(self.file_path, 'a') as outf:
-                outf.write(f"{self.model_name};{self.best_epoch};{self.max_train_epochs};{self.best_score}\n")
+                outf.write(f"{self.model_name};{self.best_epoch};{self.max_train_epochs};{self.best_score:0.6}\n")
 
