@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import Variable
 from torch import nn
-from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer, DynamicRouting
+from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer, DynamicRouting, DynamicRoutingOld
 from utils import one_hot, new_grid_size, padding_same_tf, init_weights, flex_profile
 import torch.nn.functional as F
 from torch.nn.modules.module import _addindent
@@ -169,8 +169,11 @@ class BasicCapsNet(_CapsNet):
 
             dense_layer = DenseCapsuleLayer(i=in_caps, j=out_caps, m=in_len, n=out_len, stdev=stdev_W)
 
-            rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing,
-                                        sparse_threshold=sparse_threshold, sparsify=sparsify, sparse_topk=sparse_topk)
+            # rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing,
+            #                             sparse_threshold=sparse_threshold, sparsify=sparsify, sparse_topk=sparse_topk)
+
+            rout_layer = DynamicRoutingOld(out_caps, in_caps, out_len , 1,
+                           bias_routing, sparse_threshold, sparsify, sparse_topk)
 
             # add all in right order to layer list
             dense_layers.append(dense_layer)
