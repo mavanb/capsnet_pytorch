@@ -150,8 +150,11 @@ class BasicCapsNet(_CapsNet):
         in_features_dense_layer = new_height * new_width * prim_caps
 
         # init list for all hidden parts
+        # dense_layers = []
+        # rout_layers = []
         dense_layers = torch.nn.ModuleList()
         rout_layers = torch.nn.ModuleList()
+
 
         # set input of first layer to the primary layer
         in_caps = in_features_dense_layer

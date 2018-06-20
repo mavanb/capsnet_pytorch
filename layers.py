@@ -57,8 +57,8 @@ class DynamicRouting(nn.Module):
             c_vec = self.soft_max(b_vec)
 
             # compute entropy of weight distribution of all capsules
-            stats.append(calc_entropy(c_vec, dim=1).mean().item())
-
+            # stats.append(calc_entropy(c_vec, dim=1).mean().item())
+ 
             # created unsquashed prediction for parents capsules by a weighted sum over the child predictions
             # in einsum: bij, bjin-> bjn
             # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
@@ -181,8 +181,8 @@ class DynamicRouting(nn.Module):
             # issues/2134). Instead, we take the max of topk (is largest excluded value).
 
             # set prev -inf to inf to ignore them
-            prev_inf_mask = b_vec == float("-inf")
-            b_vec[prev_inf_mask] = float("inf")
+            # prev_inf_mask = b_vec == float("-inf")
+            # b_vec[prev_inf_mask] = float("inf")
 
             # take bottomk smallest values
             val, _ = torch.topk(b_vec, mask_count, largest=False, sorted=False, dim=1)
@@ -194,10 +194,10 @@ class DynamicRouting(nn.Module):
             mask = torch.le(b_vec, kthvalues)
 
             # set prev -inf back
-            b_vec[prev_inf_mask] = float("-inf")
+            # b_vec[prev_inf_mask] = float("-inf")
 
             # check full inf cols
-            self.full_inf(b_vec, mask, method="raise")
+            # self.full_inf(b_vec, mask, method="raise")
 
             # finally, use the valid mask. note: doing this valid mask check on c_vec gives an inplace error
             b_vec[mask] = float("-inf")
