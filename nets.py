@@ -157,13 +157,12 @@ class BasicCapsNet(_CapsNet):
         dense_layers = torch.nn.ModuleList()
         rout_layers = torch.nn.ModuleList()
 
-
         # set input of first layer to the primary layer
         in_caps = in_features_dense_layer
         in_len = arch.prim.len
 
         # loop over all other layers
-        for h in arch.layers:
+        for h in arch.other_layers:
 
             # set capsules number and length to the current layer output
             out_caps = h.caps

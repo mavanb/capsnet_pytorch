@@ -405,10 +405,16 @@ class DenseCapsuleLayer(nn.Module):
         assert i == self.i, "Unexpected number of childs as input"
         assert m == self.m, "Unexpected vector lenght as input"
 
-        # the number of zero rows (m index all zero) in the input, for speed check only for the first item in batch
-        zero_count = (input[0].sum(dim=1) == 0.0).sum().item()
+        # the zero rows (m index all zero) in the input
+        zero_rows = (input.sum(dim=2) == 0.0).sum(dim=1)
 
-        if zero_count > 0:
+        # check number of zeros in first row
+        zero_count = zero_rows[0].item()
+
+        # check if number of zeros is consistens over batch
+        valid = ((zero_rows != zero_count).sum() == 0).item()
+
+        if zero_count > 0 and valid:
 
             non_zero_count = i - zero_count
 
@@ -419,6 +425,11 @@ class DenseCapsuleLayer(nn.Module):
             W = self.W.expand(b, self.j, self.i, self.n, self.m)
             W = batched_index_select(W, 2, select_idx)
             input = batched_index_select(input, 1, select_idx)
+        elif zero_count > 0:
+            # in a very rare case it not valid (consistent over batch, apparently some row got full zero
+            # by pure coincidence. log it and continue.
+            print("Invalid sparse speed up. Did not apply speed up in this batch.")
+            #todo change print to log
         else:
             W = self.W
 

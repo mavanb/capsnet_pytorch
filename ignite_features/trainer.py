@@ -167,13 +167,6 @@ class Trainer:
                                                trainer=self.train_engine)
             self.valid_engine.add_event_handler(Events.COMPLETED, early_stop_handler)
 
-        if conf.save_best:
-            best_score_handler = SaveBestScore(score_function=lambda engine: engine.state.metrics["acc"],
-                                               max_train_epochs=conf.epochs,
-                                               model_name=conf.model_name,
-                                               score_file_name=conf.score_file_name)
-            self.valid_engine.add_event_handler(Events.COMPLETED, best_score_handler)
-
         # saves models
         if conf.save_trained:
             save_handler = ModelCheckpoint(conf.trained_model_path, conf.model_name, save_interval=1,
@@ -248,7 +241,7 @@ class CapsuleTrainer(Trainer):
         data = batch[0].to(trainer.device)
         labels = batch[1].to(trainer.device)
 
-        class_probs, reconstruction, _, entropy = trainer.model(data, labels)
+        class_probs, reconstruction, _, _ = trainer.model(data, labels)
 
         total_loss, margin_loss, recon_loss = trainer.loss(data, labels, class_probs, reconstruction)
 
@@ -257,8 +250,7 @@ class CapsuleTrainer(Trainer):
         total_loss.backward()
         trainer.optimizer.step()
 
-        return {"loss": total_loss.item(), "time": (time.time(), data.shape[0]), "acc": acc.item(), "entropy":
-            entropy}
+        return {"loss": total_loss.item(), "time": (time.time(), data.shape[0]), "acc": acc.item()}
 
     @staticmethod
     def _valid_function(engine, trainer, batch):
@@ -271,10 +263,19 @@ class CapsuleTrainer(Trainer):
             class_probs, reconstruction, _, entropy = trainer.model(data)
             total_loss, _, _ = trainer.loss(data, labels, class_probs, reconstruction)
 
+            class_probs, reconstruction, _, entropy = trainer.model(data)
             acc = trainer.model.compute_acc(class_probs, labels)
 
-        return {"loss": total_loss.item(), "acc": acc.item(), "epoch": trainer.model.epoch, "entropy":
-            entropy}
+            # compute acc on validation set with no sparsity on inference
+            acc_sparse = None
+            if trainer.conf.sparsify != "None":
+                trainer.model.set_sparsify("None")
+                class_probs, _, _, _ = trainer.model(data)
+                acc_sparse = trainer.model.compute_acc(class_probs, labels)
+                acc_sparse = acc_sparse.item()
+                trainer.model.set_sparsify(trainer.conf.sparsify)
+
+        return {"loss": total_loss.item(), "acc": acc.item(), "epoch": trainer.model.epoch, "acc_sparse": acc_sparse}
 
     @staticmethod
     def _test_function(engine, trainer, batch):
@@ -325,19 +326,6 @@ class CapsuleTrainer(Trainer):
 
     def _add_custom_events(self):
 
-
-        # Add entropy metric and plots for each routing iter
-        # skip first routing iter, because entropy uniform anyways
-        # def get_entropy_names(i):
-        #     entropy_name = f"h_rout_{i}"
-        #     ValueIterMetric(get_h(i)).attach(self.train_engine, entropy_name)
-        #     return entropy_name
-
-        # entropy_metric_names = [get_entropy_names(i) for i in range(1, self.conf.routing_iters)]
-        #
-        # train_entropy_plot = VisIterPlotter(self.vis, entropy_metric_names, "H", "Train entropy", entropy_metric_names)
-        # self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, train_entropy_plot)
-
         # Add metric and plots to track the entropy of the logits
         # if sparsity method is used, plot both with and without using this method on inference
         ValueEpochMetric(lambda x: x["None"]["prob_entropy"]).attach(self.test_engine, "prob_h")
@@ -352,7 +340,7 @@ class CapsuleTrainer(Trainer):
         # if sparsity method is used, plot both with and without using this method on inference
         # plot the entropy at the last routing iteration, the last index is routing_iters-1
 
-        caps_sizes = [l.caps for l in self.model.arch.layers]
+        caps_sizes = [l.caps for l in self.model.arch.other_layers]
         EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
                            self.conf.routing_iters).attach(self.test_engine, "entropy")
         if self.conf.sparsify != "None":
@@ -377,6 +365,28 @@ class CapsuleTrainer(Trainer):
             TimeMetric(lambda x: x["time"] * 1000).attach(self.train_engine, "time")
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
                 'Time per example: {:.6f} ms', "time"))
+
+        if self.conf.save_best:
+            # Add score handler for the default inference: on valid and test the same sparsity as during training
+            best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc"],
+                                               score_test_func=lambda engine: engine.state.metrics["acc"],
+                                               max_train_epochs=self.conf.epochs,
+                                               model_name=self.conf.model_name,
+                                               score_file_name=self.conf.score_file_name)
+            self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
+            self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
+
+            # Add score handler for no sparsity during inference (if applied on training)
+            if self.conf.sparsify != "None":
+                ValueEpochMetric(lambda x: x["acc_sparse"]).attach(self.valid_engine, "acc_sparse")
+                best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc_sparse"],
+                                                   score_test_func=lambda engine:
+                                                   engine.state.metrics["acc_sparse"],
+                                                   max_train_epochs=self.conf.epochs,
+                                                   model_name=f"{self.conf.model_name}_no",
+                                                   score_file_name=self.conf.score_file_name)
+                self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
+                self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
 
 
 class CNNTrainer(Trainer):

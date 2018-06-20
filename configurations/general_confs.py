@@ -33,9 +33,9 @@ class Architecture:
         self.prim = ArchLayer(arch[0])
         self.final = ArchLayer(arch[-1])
 
-        self.layers = []
+        self.other_layers = []
         for i in arch[1:]:
-            self.layers.append(ArchLayer(i))
+            self.other_layers.append(ArchLayer(i))
 
 
 def capsule_arguments(config_file_name, path_root="."):

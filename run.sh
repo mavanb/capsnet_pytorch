@@ -1,17 +1,15 @@
 #!/bin/bash
 
 # hidden capsules test
-python caps_experiment.py --sparsify edges_topk --hidden_capsules 200 --dataset cifar10 --model_name hidden_200_topk
-python caps_experiment.py --sparsify None --hidden_capsules 200 --dataset cifar10 --model_name hidden_200_None
+#python train_capsnet.py --dataset fashionmnist --sparsify edges_topk --model_name fashion_edges_topk
+#python train_capsnet.py --dataset fashionmnist --sparsify nodes_topk --model_name fashion_nodes_topk
+#python train_capsnet.py --dataset fashionmnist --sparsify None --model_name fashion_None
+python train_capsnet.py --dataset fashionmnist --sparsify edges_random --model_name fashion_edges_random
 
-python caps_experiment.py --sparsify None --hidden_capsules 100 --dataset cifar10 --model_name hidden_100_None
-python caps_experiment.py --sparsify edges_topk --hidden_capsules 100 --dataset cifar10 --model_name hidden_100_topk
-
-python caps_experiment.py --sparsify None --hidden_capsules 50 --dataset cifar10 --model_name hidden_50_None
-python caps_experiment.py --sparsify edges_topk --hidden_capsules 50 --dataset cifar10 --model_name hidden_50_topk
-
-python caps_experiment.py --sparsify edges_topk --hidden_capsules 10 --dataset cifar10 --model_name hidden_10_topk
-python caps_experiment.py --sparsify None --hidden_capsules 10 --dataset cifar10 --model_name hidden_10_None
+#python train_capsnet.py --dataset cifar10 --sparsify edges_topk --model_name cifar_edges_topk
+#python train_capsnet.py --dataset cifar10 --sparsify nodes_topk --model_name cifar_nodes_topk
+#python train_capsnet.py --dataset cifar10 --sparsify None --model_name cifar_None
+#python train_capsnet.py --dataset cifar10 --sparsify edges_random --model_name cifar_edges_random
 
 
 
