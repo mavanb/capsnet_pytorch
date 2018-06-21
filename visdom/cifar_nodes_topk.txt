@@ -1,5 +1,5 @@
-Command Line Args:   --dataset fashionmnist --sparsify nodes_topk --model_name fashion_nodes_topk --general_conf configurations/gen_ent_test.conf --capsule_conf configurations/caps_ent_test.conf
-Config File (configurations/caps_ent_test.conf):
+Command Line Args:   --dataset cifar10 --sparsify nodes_topk --model_name cifar_nodes_topk
+Config File (./configurations/capsnet.conf):
   alpha:             0.0005
   m_plus:            0.9
   m_min:             0.1
@@ -10,7 +10,7 @@ Config File (configurations/caps_ent_test.conf):
   sparse_topk:       0.1;0.3
   stdev_W:           0.1
   architecture:      32,8;10,16;10,16
-Config File (configurations/gen_ent_test.conf):
+Config File (./configurations/general.conf):
   trained_model_path:./trained_models
   save_trained:      False
   load_name:         None
@@ -34,3 +34,6 @@ Config File (configurations/gen_ent_test.conf):
   start_visdom:      False
   use_visdom:        True
   valid_size:        0.1
+Defaults:
+  --general_config:  ./configurations/general.conf
+  --config_file_capsnet:./configurations/capsnet.conf

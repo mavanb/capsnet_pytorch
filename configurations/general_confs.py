@@ -38,13 +38,13 @@ class Architecture:
             self.other_layers.append(ArchLayer(i))
 
 
-def capsule_arguments(config_file_name, path_root="."):
+def capsule_arguments(default_conf, path_root="."):
     """ Adds all arguments used by a capsule network.
     """
 
     def custom_args(parser):
-        parser.add(f'--config_file_{config_file_name}', is_config_file=True,
-                   default=f"{path_root}/configurations/{config_file_name}.conf", help='configurations file path')
+        parser.add(f'--capsule_conf', is_config_file=True,
+                   default=f"{path_root}/configurations/{default_conf}.conf", help='configurations file path')
         parser.add_argument('--model_name', type=str, required=True, help='Name of the model.')
         parser.add_argument('--alpha', type=float, required=True, help="Alpha of CapsuleLoss")
         parser.add_argument('--m_plus', type=float, required=True, help="m_plus of margin loss")
@@ -120,11 +120,11 @@ def general_arguments(path_root):
 
     # add configurations file
     if torch.cuda.is_available():
-        p.add('--general_config', is_config_file=True, default=f"{path_root}/configurations/general.conf",
+        p.add('--general_conf', is_config_file=True, default=f"{path_root}/configurations/general.conf",
               help='configurations file path')
     else:
         # config file for local / non-cuda run
-        p.add('--general_config', is_config_file=True, default=f"{path_root}/configurations/general.conf",
+        p.add('--general_conf', is_config_file=True, default=f"{path_root}/configurations/general.conf",
               help='configurations file path')
 
     # required arguments: specified in configurations file or in

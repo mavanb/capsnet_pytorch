@@ -19,7 +19,7 @@ Config File (./configurations/general.conf):
   visdom_path:       ./visdom
   save_best:         True
   score_file_name:   best_acc
-  epochs:            10
+  epochs:            20
   batch_size:        128
   drop_last:         True
   shuffle:           True

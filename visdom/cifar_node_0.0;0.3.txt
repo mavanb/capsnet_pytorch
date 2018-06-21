@@ -1,4 +1,4 @@
-Command Line Args:   --dataset fashionmnist --sparsify nodes_topk --model_name fashion_nodes_topk --general_conf configurations/gen_ent_test.conf --capsule_conf configurations/caps_ent_test.conf
+Command Line Args:   --model_name cifar_node_0.0;0.3 --sparse_topk 0.0;0.3 --dataset cifar10 --sparsify nodes_topk --general_conf configurations/gen_ent_test.conf --capsule_conf configurations/caps_ent_test.conf
 Config File (configurations/caps_ent_test.conf):
   alpha:             0.0005
   m_plus:            0.9
@@ -7,7 +7,6 @@ Config File (configurations/caps_ent_test.conf):
   routing_iters:     3
   bias_routing:      False
   sparse_threshold:  0.09999
-  sparse_topk:       0.1;0.3
   stdev_W:           0.1
   architecture:      32,8;10,16;10,16
 Config File (configurations/gen_ent_test.conf):

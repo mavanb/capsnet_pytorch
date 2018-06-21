@@ -425,20 +425,28 @@ class DenseCapsuleLayer(nn.Module):
             W = self.W.expand(b, self.j, self.i, self.n, self.m)
             W = batched_index_select(W, 2, select_idx)
             input = batched_index_select(input, 1, select_idx)
+
+            # set new i to non zero count
+            i_new = non_zero_count
+
         elif zero_count > 0:
             # in a very rare case it not valid (consistent over batch, apparently some row got full zero
             # by pure coincidence. log it and continue.
-            print("Invalid sparse speed up. Did not apply speed up in this batch.")
             #todo change print to log
+            print("Invalid sparse speed up. Did not apply speed up in this batch.")
+            W = self.W
+            i_new = i
+
         else:
             W = self.W
+            i_new = i
 
         input = input.view(b, 1, input.shape[1], self.m, 1)
 
         # W: bjinm or 1jinm
         # input: b1jm1
         # matmul: bji(nm) * b1j(m1) = bjin1
-        u_hat = torch.matmul(W, input).view(b, j, i - zero_count, n)
+        u_hat = torch.matmul(W, input).view(b, j, i_new, n)
 
         return u_hat
 
