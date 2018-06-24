@@ -1,0 +1,16 @@
+ModelName;EpochBest;EpochsTotal;Score
+cifar_edges_topk;12;20;0.635617
+cifar_edges_topk_no;12;20;0.63772
+cifar_edges_topk_norecon;12;20;0.635016
+cifar_edges_topk_norecon_no;12;20;0.637921
+cifar_nodes_topk_norecon;19;20;0.653446
+cifar_nodes_topk_norecon_no;19;20;0.638021
+cifar_nodes_topk;10;20;0.655248
+cifar_nodes_topk_no;10;20;0.64994
+cifar_None;9;20;0.643429
+cifar_None_norecon;10;20;0.640825
+cifar_edges_random;13;20;0.658754
+cifar_edges_random_no;13;20;0.635216
+cifar_edges_random_norecon;20;20;0.652143
+cifar_edges_random_norecon_no;11;20;0.641727
+

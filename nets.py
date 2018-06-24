@@ -127,11 +127,12 @@ class ToyCapsNet(_CapsNet):
 class BasicCapsNet(_CapsNet):
 
     def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
-                 sparse_threshold, sparsify, sparse_topk, arch):
+                 sparse_threshold, sparsify, sparse_topk, arch, recon):
         super().__init__(10) #todo remove, retrieve from data
 
         self.arch = arch
         self.routing_iters = routing_iters
+        self.recon = recon
 
         prim_caps = arch.prim.caps
         prim_len = arch.prim.len
@@ -184,7 +185,8 @@ class BasicCapsNet(_CapsNet):
         self.dense_layers = dense_layers
         self.rout_layers = rout_layers
 
-        self.decoder = CapsNetDecoder(arch.final.len, arch.final.caps, in_channels, in_height, in_width)
+        if recon:
+            self.decoder = CapsNetDecoder(arch.final.len, arch.final.caps, in_channels, in_height, in_width)
 
     def set_sparsify(self, value):
         """ Set sparsify. Can, for example, be used to turn sparsify off during inference."""
@@ -231,7 +233,10 @@ class BasicCapsNet(_CapsNet):
         decoder_input = self.create_decoder_input(final_caps, t)
 
         # create reconstruction
-        recon = self.decoder(decoder_input)
+        if self.recon:
+            recon = self.decoder(decoder_input)
+        else: 
+            recon = None
 
         return logits, recon, final_caps, entropy_list
 

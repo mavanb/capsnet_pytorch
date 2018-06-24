@@ -241,9 +241,9 @@ class CapsuleTrainer(Trainer):
         data = batch[0].to(trainer.device)
         labels = batch[1].to(trainer.device)
 
-        class_probs, reconstruction, _, _ = trainer.model(data, labels)
+        class_probs, recon, _, _ = trainer.model(data, labels)
 
-        total_loss, margin_loss, recon_loss = trainer.loss(data, labels, class_probs, reconstruction)
+        total_loss, margin_loss, recon_loss = trainer.loss(data, labels, class_probs, recon)
 
         acc = trainer.model.compute_acc(class_probs, labels)
 
@@ -260,10 +260,9 @@ class CapsuleTrainer(Trainer):
             data = batch[0].to(trainer.device)
             labels = batch[1].to(trainer.device)
 
-            class_probs, reconstruction, _, entropy = trainer.model(data)
-            total_loss, _, _ = trainer.loss(data, labels, class_probs, reconstruction)
+            class_probs, recon, _, entropy = trainer.model(data)
+            total_loss, _, _ = trainer.loss(data, labels, class_probs, recon)
 
-            class_probs, reconstruction, _, entropy = trainer.model(data)
             acc = trainer.model.compute_acc(class_probs, labels)
 
             # compute acc on validation set with no sparsity on inference
@@ -362,7 +361,7 @@ class CapsuleTrainer(Trainer):
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_weight_plot)
 
         if self.conf.print_time:
-            TimeMetric(lambda x: x["time"] * 1000).attach(self.train_engine, "time")
+            TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
                 'Time per example: {:.6f} ms', "time"))
 

@@ -61,7 +61,8 @@ def capsule_arguments(default_conf, path_root="."):
         parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")
         parser.add_argument('--architecture', type=Architecture, required=True,
                             help="Architecture of the capsule network. Notation: Example: 32,8;10,16")
-
+        parser.add_argument('--use_recon', type=parse_bool, required=True,
+                            help="Use reconstruction in the total loss yes/no")
         return parser
     return custom_args
 

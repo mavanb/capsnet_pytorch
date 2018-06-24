@@ -183,7 +183,7 @@ def test_route_time(model, conf):
 
 
 def main():
-    custom_args = capsule_arguments("exp_capsnet", path_root="..")
+    custom_args = capsule_arguments("capsnet", path_root="..")
     conf, parser = get_conf([custom_args], path_root="..")
 
     log = get_logger(__name__)
@@ -194,7 +194,7 @@ def main():
     conf.epochs = 1
     log.info("Set epochs to 1. Speed check runs for only for 1 epoch.")
 
-    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape)
+    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape, include_recon=conf.use_recon)
 
     print("\n --- Measure training time of Double CapsNet --- \n")
     model = TripleOrDoubleCapsNet(in_channels=data_shape[0], digit_caps=label_shape, vec_len_prim=8, vec_len_digit=16,

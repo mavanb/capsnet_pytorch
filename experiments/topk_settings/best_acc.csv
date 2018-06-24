@@ -1,0 +1,10 @@
+ModelName;EpochBest;EpochsTotal;Score
+cifar_node_0.0;0.3;9;20;0.647736
+cifar_node_0.0;0.3_no;17;20;0.638522
+cifar_node_0.3;0.3;16;20;0.659555
+cifar_node_0.3;0.3_no;16;20;0.646134
+cifar_node_0.0;0.6;12;20;0.617087
+cifar_node_0.0;0.6_no;16;20;0.606571
+cifar_node_0.4;0.4;20;20;0.66246
+cifar_node_0.4;0.4_no;20;20;0.65645
+cifar_None;9;20;0.643429

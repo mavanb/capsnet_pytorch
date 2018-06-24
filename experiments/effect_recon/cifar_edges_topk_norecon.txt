@@ -1,0 +1,36 @@
+Command Line Args:   --sparsify edges_topk --model_name cifar_edges_topk_norecon --dataset cifar10 --general_conf configurations/gen_ent_test.conf --capsule_conf configurations/caps_ent_test.conf --use_recon False
+Config File (configurations/caps_ent_test.conf):
+  alpha:             0.0005
+  m_plus:            0.9
+  m_min:             0.1
+  excessive_testing: False
+  routing_iters:     3
+  bias_routing:      False
+  sparse_threshold:  0.09999
+  sparse_topk:       0.1;0.3
+  stdev_W:           0.1
+  architecture:      32,8;10,16;10,16
+Config File (configurations/gen_ent_test.conf):
+  trained_model_path:./trained_models
+  save_trained:      False
+  load_name:         None
+  load_model:        False
+  n_saved:           1
+  visdom_path:       ./visdom
+  save_best:         True
+  score_file_name:   best_acc
+  epochs:            20
+  batch_size:        128
+  drop_last:         True
+  shuffle:           True
+  seed:              42
+  debug:             False
+  learning_rate:     0.001
+  print_time:        True
+  log_file:          False
+  log_file_name:     None
+  early_stop:        False
+  cudnn_benchmark:   True
+  start_visdom:      False
+  use_visdom:        True
+  valid_size:        0.1

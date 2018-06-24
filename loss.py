@@ -6,15 +6,16 @@ from utils import one_hot
 
 class CapsuleLoss(_Loss):
 
-    def __init__(self, m_plus, m_min, alpha, num_classes, size_average=True):
+    def __init__(self, m_plus, m_min, alpha, num_classes, include_recon, size_average=True):
         super(CapsuleLoss, self).__init__(size_average)
 
         self.m_plus = m_plus
         self.m_min = m_min
         self.num_classes = num_classes
         self.alpha = alpha
+        self.include_recon = include_recon
 
-        self.reconstruction_loss = nn.MSELoss(reduce=False)
+        self.recon_loss = nn.MSELoss(reduce=False)
 
     def forward(self, images, labels, logits, reconstructions):
         labels_one_hot = one_hot(labels, self.num_classes)
@@ -24,12 +25,20 @@ class CapsuleLoss(_Loss):
         margin_loss = labels_one_hot * present_loss + 0.5 * (1. - labels_one_hot) * absent_loss
         margin_loss_per_sample = margin_loss.sum(dim=1)
         margin_loss = margin_loss_per_sample.mean() if self.size_average else margin_loss_per_sample.sum()
-        reconstruction_loss = self.reconstruction_loss(reconstructions, images).sum(dim=-1)
-        if self.size_average:
-            reconstruction_loss = reconstruction_loss.mean()
-        else:
-            reconstruction_loss = reconstruction_loss.sum()
 
-        total_loss = margin_loss + self.alpha * reconstruction_loss
-        return total_loss, margin_loss, reconstruction_loss * self.alpha
+        if self.include_recon:
+            recon_loss = self.recon_loss(reconstructions, images).sum(dim=-1)
+            if self.size_average:
+                recon_loss = recon_loss.mean()
+            else:
+                recon_loss = recon_loss.sum()
+        else:
+            recon_loss = None
+
+        if self.include_recon:
+            total_loss = margin_loss + self.alpha * recon_loss
+        else:
+            total_loss = margin_loss
+
+        return total_loss, margin_loss, recon_loss
 

@@ -92,7 +92,9 @@ class TimeMetric(Metric):
         self._num_examples = 0
 
     def update(self, output):
-        new_time = output[0]
+        # convert time to ms
+        new_time = output[0] * 1000
+
         if self._prev_time:
             batch_size = output[1]
             new_diff = (new_time - self._prev_time)

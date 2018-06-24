@@ -29,9 +29,10 @@ def main():
     model = BasicCapsNet(in_channels=data_shape[0], routing_iters=conf.routing_iters, in_height=data_shape[1],
                          in_width=data_shape[2], stdev_W=conf.stdev_W, bias_routing=conf.bias_routing,
                          sparse_threshold=conf.sparse_threshold, sparsify=conf.sparsify, sparse_topk=conf.sparse_topk,
-                         arch=conf.architecture)
+                         arch=conf.architecture, recon=conf.use_recon)
 
-    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape)
+    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape,
+                               include_recon=conf.use_recon)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
 
