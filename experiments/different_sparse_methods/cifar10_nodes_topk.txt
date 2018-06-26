@@ -1,4 +1,4 @@
-Command Line Args:   --dataset mnist --sparsify edges_topk --model_name mnist_edges_topk --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --seed 2
+Command Line Args:   --dataset cifar10 --sparsify nodes_topk --model_name cifar10_nodes_topk --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf
 Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   alpha:             0.0005
   m_plus:            0.9
@@ -26,6 +26,7 @@ Config File (experiments/different_sparse_methods/gen_ent_test.conf):
   batch_size:        128
   drop_last:         True
   shuffle:           True
+  seed:              42
   debug:             False
   exp_name:          different_sparse_methods
   learning_rate:     0.001

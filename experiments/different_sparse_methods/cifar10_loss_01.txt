@@ -1,4 +1,4 @@
-Command Line Args:   --dataset mnist --sparsify edges_topk --model_name mnist_edges_topk --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --seed 2
+Command Line Args:   --dataset cifar10 --sparsify None --model_name cifar10_loss_01 --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --beta 0.1 --use_entropy True --seed 1
 Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   alpha:             0.0005
   m_plus:            0.9
@@ -11,8 +11,6 @@ Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   stdev_W:           0.1
   architecture:      32,8;10,16;10,16
   use_recon:         True
-  beta:              0.01
-  use_entropy:       False
 Config File (experiments/different_sparse_methods/gen_ent_test.conf):
   trained_model_path:./trained_models
   save_trained:      False

@@ -49,7 +49,7 @@ class DynamicRouting(nn.Module):
         b_vec = self.b_vec
 
         # track entropy of c_vec per iter
-        stats = []
+        entropy_layer = torch.zeros(b, iters, device=get_device(), requires_grad=False)
 
         for index in range(iters):
 
@@ -57,8 +57,8 @@ class DynamicRouting(nn.Module):
             c_vec = self.soft_max(b_vec)
 
             # compute entropy of weight distribution of all capsules
-            stats.append(calc_entropy(c_vec, dim=1).mean().item())
- 
+            # stats.append(calc_entropy(c_vec, dim=1).mean().item())
+            entropy_layer[:, index] = calc_entropy(c_vec, dim=1).mean(dim=1)
             # created unsquashed prediction for parents capsules by a weighted sum over the child predictions
             # in einsum: bij, bjin-> bjn
             # in matmul: bj1i, bjin = bj (1i)(in) -> bjn
@@ -98,7 +98,7 @@ class DynamicRouting(nn.Module):
 
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
-        return v_vec, stats
+        return v_vec, entropy_layer
 
     def sparsify_nodes_topk(self, b_vec, index, iters):
 
@@ -123,7 +123,7 @@ class DynamicRouting(nn.Module):
             # get largest smallest value
             kthvalues, _ = torch.max(val, dim=1, keepdim=True)
 
-            # mask all equal or smaller than largest smallest value
+            # m ask all equal or smaller than largest smallest value
             delete_values = torch.le(z_j, kthvalues)
 
             # set prev -inf back (only after first iter)

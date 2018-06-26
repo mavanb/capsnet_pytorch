@@ -31,8 +31,9 @@ def main():
                          sparse_threshold=conf.sparse_threshold, sparsify=conf.sparsify, sparse_topk=conf.sparse_topk,
                          arch=conf.architecture, recon=conf.use_recon)
 
-    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape,
-                               include_recon=conf.use_recon)
+    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, conf.beta, num_classes=label_shape,
+                               include_recon=conf.use_recon, include_entropy=conf.use_entropy,
+                               caps_sizes=model.caps_sizes)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
 

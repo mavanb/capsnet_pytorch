@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer, DynamicRouting
-from utils import one_hot, new_grid_size, padding_same_tf, init_weights, flex_profile
+from utils import one_hot, new_grid_size, padding_same_tf, init_weights, flex_profile, get_device
 import torch.nn.functional as F
 from torch.nn.modules.module import _addindent
 import numpy as np
@@ -134,6 +134,9 @@ class BasicCapsNet(_CapsNet):
         self.routing_iters = routing_iters
         self.recon = recon
 
+        self.caps_sizes = torch.tensor([l.caps for l in arch.other_layers], device=get_device(),
+                                       requires_grad=False)
+
         prim_caps = arch.prim.caps
         prim_len = arch.prim.len
 
@@ -153,8 +156,6 @@ class BasicCapsNet(_CapsNet):
         in_features_dense_layer = new_height * new_width * prim_caps
 
         # init list for all hidden parts
-        # dense_layers = []
-        # rout_layers = []
         dense_layers = torch.nn.ModuleList()
         rout_layers = torch.nn.ModuleList()
 
@@ -210,18 +211,20 @@ class BasicCapsNet(_CapsNet):
         caps_input = primary_caps_flat
 
         # list for all routing stats
-        entropy_list = []
+        # entropy_list = []
+        entropy = torch.zeros(len(self.dense_layers), b, self.routing_iters, device=get_device(), requires_grad=False)
 
         # loop over the capsule layers
-        for dense_layer, rout_layer in zip(self.dense_layers, self.rout_layers):
+        for layer_idx, (dense_layer, rout_layer) in enumerate(zip(self.dense_layers, self.rout_layers)):
 
             # compute for each child a parent prediction
             all_caps = dense_layer(caps_input)
 
             # take weighted average of parent prediction, weights determined based on correspondence of predictions
-            caps_input, entropy_stats = rout_layer(all_caps, self.routing_iters)
+            caps_input, entropy_layer = rout_layer(all_caps, self.routing_iters)
 
-            entropy_list.append(entropy_stats)
+            # entropy_list.append(entropy_stats)
+            entropy[layer_idx, :, :] = entropy_layer
 
         # final capsule are the output of last layer
         final_caps = caps_input
@@ -238,7 +241,7 @@ class BasicCapsNet(_CapsNet):
         else: 
             recon = None
 
-        return logits, recon, final_caps, entropy_list
+        return logits, recon, final_caps, entropy
 
 
 class BaselineCNN(_Net):

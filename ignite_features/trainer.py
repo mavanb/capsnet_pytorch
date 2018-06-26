@@ -69,11 +69,11 @@ class Trainer:
                 import sys
 
                 # create visdom enviroment path if not exists
-                if not os.path.exists(conf.visdom_path):
-                    os.makedirs(conf.visdom_path)
+                if not os.path.exists(conf.exp_path):
+                    os.makedirs(conf.exp_path)
 
                 subprocess.Popen([f"{sys.executable}", "-m", "visdom.server", "-logging_level", "50", "-env_path",
-                                  conf.visdom_path])
+                                  conf.exp_path])
 
                 retries = 0
                 while (not self.vis.check_connection()) and retries < 10:
@@ -241,9 +241,9 @@ class CapsuleTrainer(Trainer):
         data = batch[0].to(trainer.device)
         labels = batch[1].to(trainer.device)
 
-        class_probs, recon, _, _ = trainer.model(data, labels)
+        class_probs, recon, _, entropy = trainer.model(data, labels)
 
-        total_loss, margin_loss, recon_loss = trainer.loss(data, labels, class_probs, recon)
+        total_loss, margin_loss, recon_loss, entropy_loss = trainer.loss(data, labels, class_probs, recon, entropy)
 
         acc = trainer.model.compute_acc(class_probs, labels)
 
@@ -261,7 +261,7 @@ class CapsuleTrainer(Trainer):
             labels = batch[1].to(trainer.device)
 
             class_probs, recon, _, entropy = trainer.model(data)
-            total_loss, _, _ = trainer.loss(data, labels, class_probs, recon)
+            total_loss, _, _, _ = trainer.loss(data, labels, class_probs, recon, entropy)
 
             acc = trainer.model.compute_acc(class_probs, labels)
 
@@ -301,7 +301,7 @@ class CapsuleTrainer(Trainer):
 
             test_dict["None"] = {}
             test_dict["None"]["acc"] = acc.item()
-            test_dict["None"]["entropy"] = entropy
+            test_dict["None"]["entropy"] = entropy.data
             test_dict["None"]["prob_entropy"] = prob_entropy
 
             if train_sparsify != "None":
@@ -315,7 +315,7 @@ class CapsuleTrainer(Trainer):
 
                 test_dict[train_sparsify] = {}
                 test_dict[train_sparsify]["acc"] = acc.item()
-                test_dict[train_sparsify]["entropy"] = entropy
+                test_dict[train_sparsify]["entropy"] = entropy.data
                 test_dict[train_sparsify]["prob_entropy"] = prob_entropy
 
         # set sparsity back to original setting
@@ -339,7 +339,7 @@ class CapsuleTrainer(Trainer):
         # if sparsity method is used, plot both with and without using this method on inference
         # plot the entropy at the last routing iteration, the last index is routing_iters-1
 
-        caps_sizes = [l.caps for l in self.model.arch.other_layers]
+        caps_sizes = self.model.caps_sizes
         EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
                            self.conf.routing_iters).attach(self.test_engine, "entropy")
         if self.conf.sparsify != "None":
@@ -370,8 +370,10 @@ class CapsuleTrainer(Trainer):
             best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc"],
                                                score_test_func=lambda engine: engine.state.metrics["acc"],
                                                max_train_epochs=self.conf.epochs,
-                                               model_name=self.conf.model_name,
-                                               score_file_name=self.conf.score_file_name)
+                                               model_name=self.conf.model_name if self.conf.sparsify == "None" else
+                                               self.conf.model_name + "_no",
+                                               score_file_name=self.conf.score_file_name,
+                                               root_path=self.conf.exp_path)
             self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
             self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
 
@@ -382,8 +384,9 @@ class CapsuleTrainer(Trainer):
                                                    score_test_func=lambda engine:
                                                    engine.state.metrics["acc_sparse"],
                                                    max_train_epochs=self.conf.epochs,
-                                                   model_name=f"{self.conf.model_name}_no",
-                                                   score_file_name=self.conf.score_file_name)
+                                                   model_name=self.conf.model_name,
+                                                   score_file_name=self.conf.score_file_name,
+                                                   root_path=self.conf.exp_path)
                 self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
                 self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
 

@@ -63,6 +63,8 @@ def capsule_arguments(default_conf, path_root="."):
                             help="Architecture of the capsule network. Notation: Example: 32,8;10,16")
         parser.add_argument('--use_recon', type=parse_bool, required=True,
                             help="Use reconstruction in the total loss yes/no")
+        parser.add_argument('--use_entropy', type=parse_bool, required=True, help="Include entropy in the loss yes/no.")
+        parser.add_argument('--beta', type=float, required=True, help="The scaling factor of the entropy_loss")
         return parser
     return custom_args
 
@@ -102,15 +104,13 @@ def get_conf(custom_args_list=[], path_root="."):
     conf.model_checkpoint_path = "{}/{}{}".format(conf.trained_model_path, conf.model_name,
                                                   "_debug" if conf.debug else "")
     conf.model_load_path = "{}/{}".format(conf.trained_model_path, conf.load_name)
+    conf.exp_path = f"./experiments/{conf.exp_name}"
 
-    # if use visdom, save config to visdom path to easily find config with environment
-    if conf.use_visdom:
+    if not os.path.exists(conf.exp_path):
+        os.makedirs(conf.exp_path)
 
-        if not os.path.exists(conf.visdom_path):
-            os.makedirs(conf.visdom_path)
-
-        with open(f"{conf.visdom_path}/{conf.model_name}.txt", "w") as f:
-            f.write(parser.format_values())
+    with open(f"{conf.exp_path}/{conf.model_name}.txt", "w") as f:
+        f.write(parser.format_values())
 
     return conf, parser
 
@@ -153,4 +153,4 @@ def general_arguments(path_root):
     p.add_argument('--valid_size', type=float, required=True, help='Size of the validation set (between 0.0 and 1.0)')
     p.add_argument('--score_file_name', type=str, required=True, help='File name of the best scores over all epochs. Save must be True. ')
     p.add_argument('--save_best', type=str, required=True, help='Save best score yes/no.')
-
+    p.add_argument('--exp_name', type=str, required=True, help="Name of the experiment.")

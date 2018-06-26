@@ -1,19 +1,18 @@
-Command Line Args:   --dataset mnist --sparsify edges_topk --model_name mnist_edges_topk --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --seed 2
-Config File (experiments/different_sparse_methods/caps_ent_test.conf):
+Command Line Args:   --model_name cifar_random_0.3;0.3 --sparse_topk 0.3;0.3 --dataset cifar10 --sparsify edges_random --general_conf configurations/gen_ent_loss.conf --capsule_conf configurations/caps_ent_loss.conf
+Config File (configurations/caps_ent_loss.conf):
   alpha:             0.0005
   m_plus:            0.9
   m_min:             0.1
+  use_entropy:       False
+  beta:              0.1
   excessive_testing: False
   routing_iters:     3
   bias_routing:      False
   sparse_threshold:  0.09999
-  sparse_topk:       0.1;0.3
   stdev_W:           0.1
   architecture:      32,8;10,16;10,16
   use_recon:         True
-  beta:              0.01
-  use_entropy:       False
-Config File (experiments/different_sparse_methods/gen_ent_test.conf):
+Config File (configurations/gen_ent_loss.conf):
   trained_model_path:./trained_models
   save_trained:      False
   load_name:         None
@@ -26,14 +25,14 @@ Config File (experiments/different_sparse_methods/gen_ent_test.conf):
   batch_size:        128
   drop_last:         True
   shuffle:           True
+  seed:              42
   debug:             False
-  exp_name:          different_sparse_methods
   learning_rate:     0.001
   print_time:        True
   log_file:          False
   log_file_name:     None
   early_stop:        False
   cudnn_benchmark:   True
-  start_visdom:      True
+  start_visdom:      False
   use_visdom:        True
   valid_size:        0.1

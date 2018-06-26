@@ -45,9 +45,9 @@ class EntropyEpochMetric(Metric):
 
     def __init__(self, output_transform, sizes, iters):
 
-        self.sizes = sizes
+        self.sizes = sizes.cpu().numpy()
         self.iters = iters
-        self.num_layers = len(sizes)
+        self.num_layers = len(self.sizes)
 
         self._layers = np.zeros((self.num_layers, self.iters))
         self._num_examples = 0
@@ -58,22 +58,19 @@ class EntropyEpochMetric(Metric):
         self._layers.fill(0)
         self._num_examples = 0
 
-    def update(self, entropy_values):
+    def update(self, entropy):
 
-        assert type(entropy_values) == list and type(entropy_values[0]) == list, "Entropy metrics expects list of list"
+        # take mean over the batch index convert to numpy
+        entropy = entropy.mean(dim=1).cpu().numpy()
 
-        assert len(entropy_values) == self.num_layers, "The entropy values a have different size than the layers."
-
-        assert set([len(l) for l in entropy_values]) == {self.iters}
-
-        self._layers += np.asarray(entropy_values, dtype=float)
+        self._layers += entropy
         self._num_examples += 1.0
 
     def compute(self):
 
         layers = self._layers / self._num_examples
 
-        weights = np.asarray(self.sizes) / sum(self.sizes)
+        weights = self.sizes / sum(self.sizes)
         average = (layers * weights.reshape(-1, 1)).sum(axis=0)
 
         return {"layers": layers, "avg": average}
