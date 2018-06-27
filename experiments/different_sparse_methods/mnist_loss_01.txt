@@ -1,4 +1,4 @@
-Command Line Args:   --dataset mnist --sparsify None --model_name mnist_loss_01 --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --beta 0.1 --use_entropy True --seed 2
+Command Line Args:   --dataset mnist --sparsify None --model_name mnist_loss_01 --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --beta 0.1 --use_entropy True --seed 8
 Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   alpha:             0.0005
   m_plus:            0.9

@@ -56,7 +56,7 @@ class TripleOrDoubleCapsNet(_CapsNet):
 
         self.dynamic_routing1 = DynamicRouting(j=hidden_capsules, i=in_features_dense_layer, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify, sparse_topk=sparse_topk)
+                                               sparse_method=sparsify, mask_rato=sparse_topk)
 
         self.dense_caps_layer2 = DenseCapsuleLayer(i=hidden_capsules, j=hidden_capsules,
                                                    m=vec_len_digit, n=vec_len_digit,
@@ -64,7 +64,7 @@ class TripleOrDoubleCapsNet(_CapsNet):
 
         self.dynamic_routing2 = DynamicRouting(j=hidden_capsules, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify, sparse_topk=sparse_topk)
+                                               sparse_method=sparsify, mask_rato=sparse_topk)
 
         self.dense_caps_layer3 = DenseCapsuleLayer(i=hidden_capsules, j=digit_caps,
                                                    m=vec_len_digit, n=vec_len_digit,
@@ -72,7 +72,7 @@ class TripleOrDoubleCapsNet(_CapsNet):
 
         self.dynamic_routing3 = DynamicRouting(j=digit_caps, i=hidden_capsules, n=vec_len_digit, softmax_dim=softmax_dim,
                                                bias_routing=bias_routing, sparse_threshold=sparse_threshold,
-                                               sparsify=sparsify, sparse_topk=sparse_topk)
+                                               sparse_method=sparsify, mask_rato=sparse_topk)
 
         self.decoder = CapsNetDecoder(vec_len_digit, digit_caps, in_channels, in_height, in_width)
 

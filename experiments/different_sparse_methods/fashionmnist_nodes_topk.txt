@@ -1,4 +1,4 @@
-Command Line Args:   --dataset fashionmnist --sparsify nodes_topk --model_name fashionmnist_nodes_topk --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --seed 2
+Command Line Args:   --dataset fashionmnist --sparsify nodes_topk --model_name fashionmnist_nodes_topk --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --seed 9
 Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   alpha:             0.0005
   m_plus:            0.9

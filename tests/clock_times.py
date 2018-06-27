@@ -19,8 +19,8 @@ class TestModel(nn.Module):
                                              stdev=0.1)
 
         self.routing_layer = DynamicRouting(j=num_parents, i=num_childs, n=len_out, softmax_dim=1,
-                                       bias_routing=True, sparse_threshold=0.99,
-                                       sparsify=sparsify, sparse_topk=sparse_topk)
+                                            bias_routing=True, sparse_threshold=0.99,
+                                            sparse_method=sparsify, mask_rato=sparse_topk)
 
     def forward(self, data):
         """ Do forward pass and measure time.
@@ -149,7 +149,7 @@ class TimeClocker:
 
         rout = DynamicRouting(j=data.shape[1], i=data.shape[1], n=data.shape[2], softmax_dim=1,
                               bias_routing=True, sparse_threshold=0.99,
-                              sparsify=sparsify, sparse_topk=sparse_topk).to(get_device())
+                              sparse_method=sparsify, mask_rato=sparse_topk).to(get_device())
         return rout(dense(data), 3)[0].data
 
     def save(self):

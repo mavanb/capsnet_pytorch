@@ -141,4 +141,53 @@ def batched_index_select(input, dim, index):
     return torch.gather(input, dim, index)
 
 
+def multinomial_nd(input, num_samples, dim, replacement=False):
+    assert isinstance(dim, int), "dim should be int"
+    assert num_samples <= input.shape[dim], "Num samples should be smaller than length of input in the sample dimension"
+
+    d = len(input.shape)
+    assert 1 <= d <= 3, "multinomial_nd only supports 1 to 3 dims"
+
+    if d == 1:
+        assert dim == 0, "dim should be 0"
+
+        input = torch.multinomial(input, num_samples, replacement=replacement)
+
+    elif d == 2:
+
+        assert 0 <= dim <= 1, "dim should be 0 or 1"
+
+        if dim == 0:
+            input = input.permute(1, 0)
+
+        input = torch.multinomial(input, num_samples, replacement=replacement)
+
+        if dim == 0:
+            input.permute(1, 0)
+
+    elif d == 3:
+
+        assert 0 <= dim <= 2, "dim should be 0, 1 or 2"
+
+        # make sure indexed dimension is the last dimension
+        if dim == 1:
+            input = input.permute(0, 2, 1)
+        elif dim == 0:
+            input = input.permute(1, 2, 0)
+
+        b = input.shape[0]
+        batch_list = []
+        for idx in range(b):
+            inp = input[idx]
+            sample = torch.multinomial(inp, num_samples, replacement=replacement)
+            batch_list.append(sample)
+
+        input = torch.stack(batch_list)
+
+        if dim == 1:
+            input = input.permute(0, 2, 1)
+        elif dim == 0:
+            input = input.permute(2, 0, 1)
+
+    return input
 

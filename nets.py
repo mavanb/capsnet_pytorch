@@ -127,7 +127,7 @@ class ToyCapsNet(_CapsNet):
 class BasicCapsNet(_CapsNet):
 
     def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
-                 sparse_threshold, sparsify, sparse_topk, arch, recon):
+                 sparse_method, sparse_target, mask_percent, arch, recon):
         super().__init__(10) #todo remove, retrieve from data
 
         self.arch = arch
@@ -173,7 +173,8 @@ class BasicCapsNet(_CapsNet):
             dense_layer = DenseCapsuleLayer(j=out_caps, i=in_caps, m=in_len, n=out_len, stdev=stdev_W)
 
             rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing,
-                                        sparse_threshold=sparse_threshold, sparsify=sparsify, sparse_topk=sparse_topk)
+                                        sparse_method=sparse_method, sparse_target=sparse_target,
+                                        mask_percent=mask_percent)
 
             # add all in right order to layer list
             dense_layers.append(dense_layer)

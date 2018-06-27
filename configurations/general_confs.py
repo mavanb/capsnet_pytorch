@@ -16,6 +16,14 @@ def parse_bool(v):
         raise configargparse.ArgumentTypeError('Boolean value expected.')
 
 
+def parse_mask_percentage(v):
+    percentages = []
+    for i in v.split("-"):
+        i = float(i)
+        assert 0.0 <= i < 1.0, "Mask percentage should satisfy 0 <= p < 1"
+        percentages.append(i)
+    return percentages
+
 class ArchLayer:
     def __init__(self, layer_str):
         l = [int(e) for e in layer_str.split(",")]
@@ -56,9 +64,10 @@ def capsule_arguments(default_conf, path_root="."):
         parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
         parser.add_argument('--excessive_testing', type=parse_bool, required=True,
                             help="Do excessive tests on tests set")
-        parser.add_argument('--sparse_threshold', type=float, required=True, help="Threshold of routing to sparsify.")
-        parser.add_argument('--sparsify', type=str, required=True, help="The method used to sparsify the parse tree.")
-        parser.add_argument('--sparse_topk', type=str, required=True, help="Percentage of non top k elements to exclude.")
+        parser.add_argument('--sparse_method', type=str, required=True, help="Method to select: none, topk, random or sample.")
+        parser.add_argument('--sparse_target', type=str, required=True, help="Target to sparsify: nodes or edges")
+        parser.add_argument('--mask_percent', type=parse_mask_percentage, required=True, help="Percentage "
+                                                                                                 "of elements to mask")
         parser.add_argument('--architecture', type=Architecture, required=True,
                             help="Architecture of the capsule network. Notation: Example: 32,8;10,16")
         parser.add_argument('--use_recon', type=parse_bool, required=True,

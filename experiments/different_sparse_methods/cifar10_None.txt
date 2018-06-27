@@ -1,4 +1,4 @@
-Command Line Args:   --dataset cifar10 --sparsify None --model_name cifar10_None --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf
+Command Line Args:   --dataset cifar10 --sparsify None --model_name cifar10_None --general_conf experiments/different_sparse_methods/gen_ent_test.conf --capsule_conf experiments/different_sparse_methods/caps_ent_test.conf --seed 9
 Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   alpha:             0.0005
   m_plus:            0.9
@@ -26,7 +26,6 @@ Config File (experiments/different_sparse_methods/gen_ent_test.conf):
   batch_size:        128
   drop_last:         True
   shuffle:           True
-  seed:              42
   debug:             False
   exp_name:          different_sparse_methods
   learning_rate:     0.001
