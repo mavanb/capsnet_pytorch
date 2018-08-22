@@ -15,7 +15,7 @@ class SaveBestScore:
         root_path (str, optional): path of the folder to save file
     """
 
-    def __init__(self, score_valid_func, score_test_func, max_train_epochs, model_name, score_file_name,
+    def __init__(self, score_valid_func, score_test_func, max_train_epochs, model_name, sparse, score_file_name,
                  root_path="./best_acc"):
 
         assert callable(score_valid_func), "Argument score_function should be a function"
@@ -32,6 +32,9 @@ class SaveBestScore:
 
         # best valid epoch, used to retrieve best test epoch
         self.best_valid_epoch = None
+
+        # sparse method used
+        self.sparse = sparse
 
         # array of each test score per epoch
         self.test_scores = []
@@ -50,7 +53,7 @@ class SaveBestScore:
 
         if not os.path.isfile(self.file_path):
             with open(self.file_path, 'w') as outf:
-                outf.write(f"ModelName;EpochBest;EpochsTotal;Score\n")
+                outf.write(f"ModelName;EpochBest;EpochsTotal;Sparse;Score\n")
 
     def update_valid(self, valid_engine):
         """ Should be called by the validation engine. Determines which epoch has the best score on the
@@ -86,7 +89,7 @@ class SaveBestScore:
             best_valid_score = self.test_scores[self.best_valid_epoch - 1]
             with open(self.file_path, 'a') as outf:
                 outf.write(
-                    f"{self.model_name};{self.best_valid_epoch};{self.max_train_epochs};{best_valid_score:0.6}\n")
+                    f"{self.model_name};{self.best_valid_epoch};{self.max_train_epochs};{self.sparse};{best_valid_score:0.6}\n")
 
     def __call__(self, engine):
         score = self.score_function(engine)

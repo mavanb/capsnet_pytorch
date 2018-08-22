@@ -1,0 +1,36 @@
+Command Line Args:   --dataset cifar10 --sparse nodes_sample_0.3-0.3+edges_sample_0.3-0.3 --model_name cifar10_:nodes_sample_0.3-0.3+edges_sample_0.3-0.3: --general_conf experiments/diff_sparse/gen.conf --capsule_conf experiments/diff_sparse/caps.conf --seed 402
+Config File (experiments/diff_sparse/caps.conf):
+  use_recon:         True
+  alpha:             0.0005
+  m_plus:            0.9
+  m_min:             0.1
+  use_entropy:       False
+  beta:              0.1
+  routing_iters:     3
+  bias_routing:      False
+  stdev_W:           0.1
+  architecture:      32,8;10,16;10,16
+Config File (experiments/diff_sparse/gen.conf):
+  trained_model_path:./trained_models
+  save_trained:      False
+  load_name:         None
+  load_model:        False
+  n_saved:           1
+  visdom_path:       ./visdom
+  save_best:         True
+  score_file_name:   best_acc
+  epochs:            20
+  batch_size:        128
+  drop_last:         True
+  shuffle:           True
+  debug:             False
+  learning_rate:     0.001
+  print_time:        True
+  log_file:          False
+  log_file_name:     None
+  early_stop:        False
+  cudnn_benchmark:   True
+  start_visdom:      True
+  use_visdom:        True
+  valid_size:        0.1
+  exp_name:          diff_sparse

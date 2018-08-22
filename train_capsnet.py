@@ -9,6 +9,7 @@ from ignite_features.trainer import CapsuleTrainer
 from nets import BasicCapsNet
 from loss import CapsuleLoss
 from utils import get_logger
+import numpy as np
 
 
 def main():
@@ -22,14 +23,18 @@ def main():
     log = get_logger(__name__)
     log.info(parser.format_values())
 
+    # seed must be set before any stochastic operation in torch or numpy
+    if conf.seed:
+        torch.manual_seed(conf.seed)
+        np.random.seed(conf.seed)
+
     # get data set
     transform = transforms.ToTensor()
     data_train, data_test, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 
     model = BasicCapsNet(in_channels=data_shape[0], routing_iters=conf.routing_iters, in_height=data_shape[1],
                          in_width=data_shape[2], stdev_W=conf.stdev_W, bias_routing=conf.bias_routing,
-                         sparse_method=conf.sparse_method, sparse_target=conf.sparse_target,
-                         mask_percent=conf.mask_percent, arch=conf.architecture, recon=conf.use_recon)
+                         arch=conf.architecture, recon=conf.use_recon, sparse=conf.sparse)
 
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, conf.beta, num_classes=label_shape,
                                include_recon=conf.use_recon, include_entropy=conf.use_entropy,

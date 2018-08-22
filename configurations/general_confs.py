@@ -24,6 +24,7 @@ def parse_mask_percentage(v):
         percentages.append(i)
     return percentages
 
+
 class ArchLayer:
     def __init__(self, layer_str):
         l = [int(e) for e in layer_str.split(",")]
@@ -46,6 +47,58 @@ class Architecture:
             self.other_layers.append(ArchLayer(i))
 
 
+class SparseMethods(list):
+
+    def __init__(self, sparse_str):
+
+        # string denote the s   parse method
+        self.sparse_str = sparse_str
+
+        # bool to indicate of any sparse method is used at any iteration
+        self.is_sparse = False
+
+        super().__init__([self._parse_step(e) for e in sparse_str.split("+")])
+
+    def set_off(self):
+        """ Set sparsity off. For example to not sparsify during inference."""
+        for elem in self:
+            elem["target"] = "none"
+
+    def set_on(self):
+        """ Set sparsity on again. If for example set off during inference."""
+        for elem in self:
+            elem["target"] = elem["target_train"]
+
+    def _parse_step(self, step_str):
+        step_list = step_str.split("_")
+        if len(step_list) == 1:
+            target = "none"
+            method = None
+            percent = None
+        elif len(step_list) == 3:
+            target, method, percent_str = step_str.split("_")
+            percent = self._parse_percent(percent_str)
+            if sum(percent) > 0:
+                self.is_sparse = True
+        else:
+            raise ValueError("Each sparse step should be written as: target_method_percent-percent (1 percent for each "
+                             "routing iteration) or none.")
+        return {
+            "target": target,
+            "method": method,
+            "percent": percent,
+            "target_train": target
+        }
+
+    @staticmethod
+    def _parse_percent(percent_str):
+        percent = []
+        for i in percent_str.split("-"):
+            i = float(i)
+            assert 0.0 <= i < 1.0, "Mask percentage should satisfy 0 <= p < 1"
+            percent.append(i)
+        return percent
+
 def capsule_arguments(default_conf, path_root="."):
     """ Adds all arguments used by a capsule network.
     """
@@ -62,12 +115,7 @@ def capsule_arguments(default_conf, path_root="."):
         parser.add_argument('--dataset', type=str, required=True, help="Either mnist or cifar10")
         parser.add_argument('--stdev_W', type=float, required=True, help="stddev of W of capsule layer")
         parser.add_argument('--bias_routing', type=parse_bool, required=True, help="whether to use bias in routing")
-        parser.add_argument('--excessive_testing', type=parse_bool, required=True,
-                            help="Do excessive tests on tests set")
-        parser.add_argument('--sparse_method', type=str, required=True, help="Method to select: none, topk, random or sample.")
-        parser.add_argument('--sparse_target', type=str, required=True, help="Target to sparsify: nodes or edges")
-        parser.add_argument('--mask_percent', type=parse_mask_percentage, required=True, help="Percentage "
-                                                                                                 "of elements to mask")
+        parser.add_argument('--sparse', type=SparseMethods, required=True, help="Sparsify procedure. See docs.")
         parser.add_argument('--architecture', type=Architecture, required=True,
                             help="Architecture of the capsule network. Notation: Example: 32,8;10,16")
         parser.add_argument('--use_recon', type=parse_bool, required=True,

@@ -3,13 +3,16 @@ import torch.nn as nn
 from utils import squash, init_weights, flex_profile, get_device, calc_entropy, batched_index_select, multinomial_nd
 import math
 
+
 class DynamicRouting(nn.Module):
 
-    def __init__(self, j, n, bias_routing, sparse_method, sparse_target, mask_percent):
+    def __init__(self, j, n, bias_routing, sparse): #sparse_method, sparse_target, mask_percent):
         super().__init__()
         self.soft_max = torch.nn.Softmax(dim=1)
         self.j = j
         self.n = n
+
+        self.sparse = sparse
 
         # init depends on batch_size which depends on input size, declare dynamically in forward. see:
         # https://discuss.pytorch.org/t/dynamic-parameter-declaration-in-forward-function/427/2
@@ -24,17 +27,9 @@ class DynamicRouting(nn.Module):
 
         # that can be implemented to enable analysis at end of each routing iter
         self.log_function = None
-        self.mask_percent = mask_percent
-        self.sparse_method = sparse_method
-        self.sparse_target = sparse_target
 
     @flex_profile
     def forward(self, u_hat, iters):
-
-        # check if enough topk values ratios are given in the configuration
-        if self.sparse_method != "None":
-            assert len(self.mask_percent) + 1 >= iters, "Please specify for each update routing iter the sparse top k."\
-                " Example: routing iters: 3, sparse_topk = 0.4-0.4"
 
         b = u_hat.shape[0]
         i = u_hat.shape[2]
@@ -83,25 +78,38 @@ class DynamicRouting(nn.Module):
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, i, 1, self.n),
                                              v_vec.view(b, self.j, 1, self.n, 1)).view(b, self.j, i)
 
-                if self.sparse_method != "none":
-                    b_vec = self.sparsify(b_vec, index, self.sparse_target, self.sparse_method, i)
+                for step in self.sparse:
+                    if step["target"] != "none":
+                        try:
+                            percent = step["percent"][index]
+                        except IndexError:
+                            raise IndexError(f"Expected {iters} values, only {len(step['percent'])} where given.")
+                        b_vec = self.sparsify(b_vec, index, step["target"], step["method"], percent, i)
 
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
         return v_vec, entropy_layer
 
-    def sparsify(self, b_vec, iter, target, method, i):
+    def sparsify(self, b_vec, iter, target, method, percent, i):
 
         # get batch_size
         b = b_vec.shape[0]
 
         # number of elements to select (or not mask)
-        select_count = self.j
-        for prev in self.mask_percent[0:iter+1]:
-            select_count = math.ceil(select_count * (1 - prev))
+        # select_count = self.j
+        # for prev in self.mask_percent[0:iter+1]:
+        #     select_count = math.ceil(select_count * (1 - prev))
+
+        # amount of edges left of the childs, min and max can be different due to nodes and edges sparse
+        inf_count = (b_vec != float("-inf")).sum(dim=1)
+        min_left = inf_count.min().item()
+        max_left = inf_count.max().item()
+
+        #  number of edges to select (not mask)
+        select_count = math.ceil(min_left * (1 - percent))
 
         # select_count == j means select all, thus skip
-        if select_count < self.j:
+        if select_count < max_left:
 
             # construct mask the expected c_vec if not sparsified
             c_vec_temp = self.soft_max(b_vec)
@@ -130,11 +138,11 @@ class DynamicRouting(nn.Module):
                     weights = torch.ones_like(c_vec_temp, requires_grad=False, device=get_device())
 
                     # set weights of previous selected to zero
-                    if iter > 0:
+                    if min_left < self.j:
                         prev_inf_mask = c_vec_temp == 0.0
                         weights[prev_inf_mask] = 0.0
                 else:
-                    raise ValueError("Selected method does not exists.")
+                    raise ValueError(f"Select method '{method}' does not exists.")
 
                 indices = multinomial_nd(weights, select_count, dim=1, replacement=False)
 

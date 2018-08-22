@@ -1,0 +1,4 @@
+ModelName;EpochBest;EpochsTotal;Score
+test_caps;3;3;0.677083
+test_caps_no;2;3;nodes_topk_0.3-0.3+nodes_random_0.3-0.3;0.356771
+test_caps;3;3;nodes_topk_0.3-0.3+nodes_random_0.3-0.3;0.226562

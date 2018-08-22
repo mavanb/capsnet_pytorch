@@ -127,7 +127,7 @@ class ToyCapsNet(_CapsNet):
 class BasicCapsNet(_CapsNet):
 
     def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
-                 sparse_method, sparse_target, mask_percent, arch, recon):
+                 arch, recon, sparse):
         super().__init__(10) #todo remove, retrieve from data
 
         self.arch = arch
@@ -172,9 +172,7 @@ class BasicCapsNet(_CapsNet):
 
             dense_layer = DenseCapsuleLayer(j=out_caps, i=in_caps, m=in_len, n=out_len, stdev=stdev_W)
 
-            rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing,
-                                        sparse_method=sparse_method, sparse_target=sparse_target,
-                                        mask_percent=mask_percent)
+            rout_layer = DynamicRouting(j=out_caps, n=out_len, bias_routing=bias_routing, sparse=sparse)
 
             # add all in right order to layer list
             dense_layers.append(dense_layer)
@@ -190,10 +188,15 @@ class BasicCapsNet(_CapsNet):
         if recon:
             self.decoder = CapsNetDecoder(arch.final.len, arch.final.caps, in_channels, in_height, in_width)
 
-    def set_sparsify(self, value):
-        """ Set sparsify. Can, for example, be used to turn sparsify off during inference."""
+    def set_sparse_on(self):
+        """ Set sparsify back on in all rout layers in this class."""
         for rout_layer in self.rout_layers:
-            rout_layer.sparsify = value
+            rout_layer.sparse.set_on()
+
+    def set_sparse_off(self):
+        """ Set sparsify back off in all rout layers in this class."""
+        for rout_layer in self.rout_layers:
+            rout_layer.sparse.set_off()
 
     @flex_profile
     def forward(self, x, t=None):

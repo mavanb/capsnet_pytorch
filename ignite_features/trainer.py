@@ -1,5 +1,4 @@
 from __future__ import print_function
-from ignite_features.excessive_testing import excessive_testing_handler
 
 import os
 import numpy as np
@@ -13,6 +12,7 @@ from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
 from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
 from utils import get_device, flex_profile, get_logger, calc_entropy
 from ignite_features.handlers import SaveBestScore
+from torch.utils.data.sampler import SequentialSampler
 import time
 
 
@@ -96,10 +96,6 @@ class Trainer:
             # and handle this within the VisPlotter class.
             self.vis = None
 
-        if conf.seed:
-            torch.manual_seed(conf.seed)
-            np.random.seed(conf.seed)
-
         # print number of parameters in model
         num_parameters = np.sum([np.prod(list(p.shape)) for p in model.parameters()])
         self._log.info("Number of parameters model: {}".format(num_parameters))
@@ -112,8 +108,9 @@ class Trainer:
         self.train_loader, self.val_loader = get_train_valid_data(data_train, valid_size=conf.valid_size, batch_size=conf.batch_size,
                                                                   drop_last=conf.drop_last,
                                                                   shuffle=conf.shuffle, **kwargs)
+        test_debug_sampler = SequentialSampler(list(range(3 * conf.batch_size))) if conf.debug else None
         self.test_loader = torch.utils.data.DataLoader(data_test, batch_size=conf.batch_size, drop_last=conf.drop_last,
-                                                       **cuda_kwargs)
+                                                       sampler=test_debug_sampler, **cuda_kwargs)
 
         model.to(self.device)
         torch.backends.cudnn.benchmark = conf.cudnn_benchmark
@@ -241,11 +238,11 @@ class CapsuleTrainer(Trainer):
         data = batch[0].to(trainer.device)
         labels = batch[1].to(trainer.device)
 
-        class_probs, recon, _, entropy = trainer.model(data, labels)
+        logits, recon, _, entropy = trainer.model(data, labels)
 
-        total_loss, margin_loss, recon_loss, entropy_loss = trainer.loss(data, labels, class_probs, recon, entropy)
+        total_loss, margin_loss, recon_loss, entropy_loss = trainer.loss(data, labels, logits, recon, entropy)
 
-        acc = trainer.model.compute_acc(class_probs, labels)
+        acc = trainer.model.compute_acc(logits, labels)
 
         total_loss.backward()
         trainer.optimizer.step()
@@ -254,143 +251,167 @@ class CapsuleTrainer(Trainer):
 
     @staticmethod
     def _valid_function(engine, trainer, batch):
-        trainer.model.eval()
+
+        model = trainer.model
+        sparse = trainer.conf.sparse
+        model.eval()
 
         with torch.no_grad():
             data = batch[0].to(trainer.device)
             labels = batch[1].to(trainer.device)
 
-            class_probs, recon, _, entropy = trainer.model(data)
-            total_loss, _, _, _ = trainer.loss(data, labels, class_probs, recon, entropy)
+            sparse.set_off()
 
-            acc = trainer.model.compute_acc(class_probs, labels)
+            logits, recon, _, entropy = model(data)
+            loss, _, _, _ = trainer.loss(data, labels, logits, recon, entropy)
+
+            acc = trainer.model.compute_acc(logits, labels).item()
+
+            sparse.set_on()
 
             # compute acc on validation set with no sparsity on inference
-            acc_sparse = None
-            if trainer.conf.sparse_method != "none":
-                trainer.model.set_sparsify("none")
-                class_probs, _, _, _ = trainer.model(data)
-                acc_sparse = trainer.model.compute_acc(class_probs, labels)
-                acc_sparse = acc_sparse.item()
-                trainer.model.set_sparsify(trainer.conf.sparsify)
+            if trainer.conf.sparse.is_sparse:
 
-        return {"loss": total_loss.item(), "acc": acc.item(), "epoch": trainer.model.epoch, "acc_sparse": acc_sparse}
+                logits_sparse, _, _, _ = model(data)
+                acc_sparse = model.compute_acc(logits_sparse, labels).item()
+
+            else:
+                acc_sparse = None
+
+        return {"loss": loss.item(), "acc": acc, "epoch": trainer.model.epoch, "acc_sparse": acc_sparse}
 
     @staticmethod
     def _test_function(engine, trainer, batch):
 
         model = trainer.model
+        sparse = trainer.conf.sparse
         model.eval()
-
-        # sparsify used during training
-        train_sparsify = trainer.conf.sparsify
-
-        # return dict
-        test_dict = {}
 
         with torch.no_grad():
             data = batch[0].to(trainer.device)
             labels = batch[1].to(trainer.device)
 
-            model.set_sparsify("none")
+            sparse.set_off()
 
-            logits, recon, caps, entropy = model(data)
-            acc = model.compute_acc(logits, labels)
-            probs = model.compute_probs(logits)
-            prob_entropy = calc_entropy(probs, dim=1).mean().item()
+            logits, _, _, entropy = model(data)
 
-            test_dict["None"] = {}
-            test_dict["None"]["acc"] = acc.item()
-            test_dict["None"]["entropy"] = entropy.data
-            test_dict["None"]["prob_entropy"] = prob_entropy
+            # none sparse metrics
+            acc = model.compute_acc(logits, labels).item()
+            entropy = entropy.data
+            prob_h = calc_entropy(model.compute_probs(logits), dim=1).mean().item()
 
-            if train_sparsify != "None":
+            sparse.set_on()
 
-                model.set_sparsify(train_sparsify)
+            if trainer.conf.sparse.is_sparse:
 
-                logits, recon, caps, entropy = model(data)
-                acc = model.compute_acc(logits, labels)
-                probs = model.compute_probs(logits)
-                prob_entropy = calc_entropy(probs, dim=1).mean().item()
+                logits_sparse, _, _, entropy_sparse = model(data)
 
-                test_dict[train_sparsify] = {}
-                test_dict[train_sparsify]["acc"] = acc.item()
-                test_dict[train_sparsify]["entropy"] = entropy.data
-                test_dict[train_sparsify]["prob_entropy"] = prob_entropy
+                # sparse metrics
+                acc_sparse = model.compute_acc(logits_sparse, labels).item()
+                entropy_sparse = entropy_sparse.data
+                prob_h_sparse = calc_entropy(model.compute_probs(logits_sparse), dim=1).mean().item()
 
-        # set sparsity back to original setting
-        model.set_sparsify(train_sparsify)
+            else:
+                acc_sparse = entropy_sparse = prob_h_sparse = None
 
-        return test_dict
+        # return test_dict
+        return {"acc": acc, "acc_sparse": acc_sparse, "entropy": entropy, "entropy_sparse": entropy_sparse,
+                "prob_h": prob_h, "prob_h_sparse": prob_h_sparse}
 
     def _add_custom_events(self):
 
-        pass
-        # Add metric and plots to track the entropy of the logits
+        # bool indicating whether method is sparse
+        is_sparse = self.conf.sparse.is_sparse
+
+        # name of sparse method
+        sparse_name = self.conf.sparse.sparse_str
+
+        # legend of the visdom plot, order should be identical to metric names
+        legend = [f"{sparse_name}_no", sparse_name] if is_sparse else None
+
+        # Add metric and to track the acc and the entropy of the logits
+        ValueEpochMetric(lambda x: x["acc"]).attach(self.test_engine, "acc")
+        ValueEpochMetric(lambda x: x["prob_h"]).attach(self.test_engine, "prob_h")
+
+        # Add metric to track entropy
+        caps_sizes = self.model.caps_sizes
+        entropy_metric = EntropyEpochMetric(lambda x: x["entropy"], caps_sizes, self.conf.routing_iters)
+        entropy_metric.attach(self.test_engine, "entropy")
+
         # if sparsity method is used, plot both with and without using this method on inference
-        # ValueEpochMetric(lambda x: x["None"]["prob_entropy"]).attach(self.test_engine, "prob_h")
-        # if self.conf.sparsify != "None":
-        #     ValueEpochMetric(lambda x: x[self.conf.sparsify]["prob_entropy"]).attach(self.test_engine, "prob_h_sparse")
-        # prop_names = "prob_h" if self.conf.sparsify == "None" else ["prob_h", "prob_h_sparse"]
-        # prop_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
-        # prop_entropy_plot = VisEpochPlotter(self.vis, prop_names, "H", "Entropy of the softmaxed logits", self.conf.model_name, prop_legend)
-        # self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, prop_entropy_plot)
+        if is_sparse:
+            # Add acc and logit entropy metric
+            ValueEpochMetric(lambda x: x["acc_sparse"]).attach(self.test_engine, "acc_sparse")
+            ValueEpochMetric(lambda x: x["prob_h_sparse"]).attach(self.test_engine, "prob_h_sparse")
+
+            # Add metric to track entropy
+            entropy_metric_sparse = EntropyEpochMetric(lambda x: x["entropy_sparse"], caps_sizes,
+                                                self.conf.routing_iters)
+            entropy_metric_sparse.attach(self.test_engine, "entropy_sparse")
+
+        prob_h = VisEpochPlotter(vis=self.vis,
+                                 metric_names=["prob_h", "prob_h_sparse"] if is_sparse else "prob_h" ,
+                                 ylabel="H",
+                                 title="Entropy of the softmaxed logits",
+                                 env_name=self.conf.model_name,
+                                 legend=legend)
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, prob_h)
 
         # Add metric and plots to track the mean entropy of the weights after routing
         # if sparsity method is used, plot both with and without using this method on inference
         # plot the entropy at the last routing iteration, the last index is routing_iters-1
 
-        # caps_sizes = self.model.caps_sizes
-        # EntropyEpochMetric(lambda x: x["None"]["entropy"], caps_sizes,
-        #                    self.conf.routing_iters).attach(self.test_engine, "entropy")
-        # if self.conf.sparsify != "None":
-        #     EntropyEpochMetric(lambda x: x[self.conf.sparsify]["entropy"], caps_sizes,
-        #                        self.conf.routing_iters).attach(self.test_engine, "entropy_sparse")
-        #
-        # h_names = "entropy" if self.conf.sparsify == "None" else ["entropy", "entropy_sparse"]
-        # h_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
-        # h_plot = VisEpochPlotter(self.vis, h_names, "H", "Average Entropy (after routing)", self.conf.model_name, h_legend,
-        #                          lambda h: h["avg"][-1])
-        # self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, h_plot)
-        #
-        # ValueEpochMetric(lambda x: x["None"]["acc"]).attach(self.test_engine, "acc")
-        # if self.conf.sparsify != "None":
-        #     ValueEpochMetric(lambda x: x[self.conf.sparsify]["acc"]).attach(self.test_engine, "acc_sparse")
-        # acc_weight_names = "acc" if self.conf.sparsify == "None" else ["acc", "acc_sparse"]
-        # acc_weight_legend = None if self.conf.sparsify == "None" else [f"{self.conf.sparsify}_no", self.conf.sparsify]
-        # acc_weight_plot = VisEpochPlotter(self.vis, acc_weight_names, "acc", "Test Accuracy", self.conf.model_name, acc_weight_legend)
-        # self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_weight_plot)
-        #
-        # if self.conf.print_time:
-        #     TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
-        #     self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
-        #         'Time per example: {:.6f} ms', "time"))
-        #
-        # if self.conf.save_best:
-        #     # Add score handler for the default inference: on valid and test the same sparsity as during training
-        #     best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc"],
-        #                                        score_test_func=lambda engine: engine.state.metrics["acc"],
-        #                                        max_train_epochs=self.conf.epochs,
-        #                                        model_name=self.conf.model_name if self.conf.sparsify == "None" else
-        #                                        self.conf.model_name + "_no",
-        #                                        score_file_name=self.conf.score_file_name,
-        #                                        root_path=self.conf.exp_path)
-        #     self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
-        #     self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
-        #
-        #     # Add score handler for no sparsity during inference (if applied on training)
-        #     if self.conf.sparsify != "None":
-        #         ValueEpochMetric(lambda x: x["acc_sparse"]).attach(self.valid_engine, "acc_sparse")
-        #         best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc_sparse"],
-        #                                            score_test_func=lambda engine:
-        #                                            engine.state.metrics["acc_sparse"],
-        #                                            max_train_epochs=self.conf.epochs,
-        #                                            model_name=self.conf.model_name,
-        #                                            score_file_name=self.conf.score_file_name,
-        #                                            root_path=self.conf.exp_path)
-        #         self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
-        #         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
-        #
+        entropy_plot = VisEpochPlotter(vis=self.vis,
+                                 metric_names=["entropy", "entropy_sparse"] if is_sparse else "entropy",
+                                 ylabel="H",
+                                 title="Average Entropy (after routing)",
+                                 env_name=self.conf.model_name,
+                                 legend=legend,
+                                 transform=lambda h: h["avg"][-1]) # transform selects the entropy at the last rout iter
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, entropy_plot)
+
+        acc_plot = VisEpochPlotter(vis=self.vis,
+                                          metric_names=["acc", "acc_sparse"] if is_sparse else "acc",
+                                          ylabel="acc",
+                                          title="Test Accuracy",
+                                          env_name=self.conf.model_name,
+                                          legend=legend)
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_plot)
+
+        if self.conf.print_time:
+            TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
+            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
+                'Time per example: {:.6f} ms', "time"))
+
+        if self.conf.save_best:
+
+            # add _no to models where sparsify is turned off
+            no_sparse_name = self.conf.model_name + "_no" if is_sparse else self.conf.model_name
+
+            # Add score handler for the default inference: on valid and test the same sparsity as during training
+            best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc"],
+                                            score_test_func=lambda engine: engine.state.metrics["acc"],
+                                            max_train_epochs=self.conf.epochs,
+                                            model_name= no_sparse_name,
+                                            sparse=sparse_name,
+                                            score_file_name=self.conf.score_file_name,
+                                            root_path=self.conf.exp_path)
+            self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
+            self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
+
+            # Add score handler for no sparsity during inference (if applied on training)
+            if is_sparse:
+                ValueEpochMetric(lambda x: x["acc_sparse"]).attach(self.valid_engine, "acc_sparse")
+                best_score_handler = SaveBestScore(score_valid_func=lambda engine: engine.state.metrics["acc_sparse"],
+                                            score_test_func=lambda engine: engine.state.metrics["acc_sparse"],
+                                            max_train_epochs=self.conf.epochs,
+                                            model_name=self.conf.model_name,
+                                            sparse=sparse_name,
+                                            score_file_name=self.conf.score_file_name,
+                                            root_path=self.conf.exp_path)
+                self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
+                self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
+
 
 class CNNTrainer(Trainer):
 

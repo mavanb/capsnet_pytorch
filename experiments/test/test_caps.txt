@@ -1,19 +1,16 @@
 Config File (./configurations/capsnet.conf):
+  use_recon:         True
   alpha:             0.0005
   m_plus:            0.9
   m_min:             0.1
-  use_entropy:       True
+  use_entropy:       False
   beta:              0.1
-  excessive_testing: False
   routing_iters:     3
   bias_routing:      False
-  sparse_threshold:  0.09999
-  sparsify:          None
-  sparse_topk:       0.0;0.8
-  dataset:           mnist
+  sparse:            nodes_topk_0.3-0.3+nodes_random_0.3-0.3
   stdev_W:           0.1
   architecture:      32,8;10,16;10,16
-  use_recon:         True
+  dataset:           mnist
   model_name:        test_caps
 Config File (./configurations/general.conf):
   trained_model_path:./trained_models
@@ -24,21 +21,21 @@ Config File (./configurations/general.conf):
   visdom_path:       ./visdom
   save_best:         True
   score_file_name:   best_acc
-  epochs:            20
+  epochs:            10
   batch_size:        128
   drop_last:         True
   shuffle:           True
   seed:              42
-  debug:             False
-  learning_rate:     0.001
+  debug:             True
+  valid_size:        0.1
   print_time:        True
   log_file:          False
   log_file_name:     None
   early_stop:        False
   cudnn_benchmark:   True
+  learning_rate:     0.001
   start_visdom:      True
   use_visdom:        True
-  valid_size:        0.1
   exp_name:          test
 Defaults:
   --general_conf:    ./configurations/general.conf
