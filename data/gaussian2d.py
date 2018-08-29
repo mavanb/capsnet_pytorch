@@ -1,3 +1,9 @@
+import numpy as np
+import torch.utils.data as data
+from utils import one_hot
+import torch
+
+
 class Gaussian2D(data.Dataset):
 
     def __init__(self, new_dim=6, n_samples=(5000, 2000), mix_coef=0.5, covs=None, means=None, train=True,

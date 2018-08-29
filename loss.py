@@ -22,11 +22,14 @@ class CapsuleLoss(_Loss):
 
         self.recon_loss = nn.MSELoss(reduce=False)
 
-    def forward(self, images, labels, logits, recon, entropy):
+    def forward(self, images, labels, logits, recon, entropy=None):
         labels_one_hot = one_hot(labels, self.num_classes)
+
+        # the factor 0.5 in front of both terms is not in the paper, but used in the source code
         present_loss = 0.5 * F.relu(self.m_plus - logits, inplace=True) ** 2
         absent_loss = 0.5 * F.relu(logits - self.m_min, inplace=True) ** 2
 
+        # the factor 0.5 is the downweight mentioned in the Margin loss in Dynamic Routing by Agreement
         margin_loss = labels_one_hot * present_loss + 0.5 * (1. - labels_one_hot) * absent_loss
         margin_loss_per_sample = margin_loss.sum(dim=1)
         margin_loss = margin_loss_per_sample.mean() if self.size_average else margin_loss_per_sample.sum()
@@ -41,6 +44,8 @@ class CapsuleLoss(_Loss):
             recon_loss = None
 
         if self.include_entropy:
+            assert self.caps_sizes, "If include entropy, the size of each capsule layer should be known."
+
             # select entropy of last layer
             last_iter_entropy = entropy[:, :, -1]
 

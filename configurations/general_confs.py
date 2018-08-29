@@ -42,16 +42,16 @@ class Architecture:
         self.prim = ArchLayer(arch[0])
         self.final = ArchLayer(arch[-1])
 
-        self.other_layers = []
+        self.all_but_prim = []
         for i in arch[1:]:
-            self.other_layers.append(ArchLayer(i))
+            self.all_but_prim.append(ArchLayer(i))
 
 
 class SparseMethods(list):
 
     def __init__(self, sparse_str):
 
-        # string denote the s   parse method
+        # string denote the sparse method
         self.sparse_str = sparse_str
 
         # bool to indicate of any sparse method is used at any iteration
@@ -98,6 +98,7 @@ class SparseMethods(list):
             assert 0.0 <= i < 1.0, "Mask percentage should satisfy 0 <= p < 1"
             percent.append(i)
         return percent
+
 
 def capsule_arguments(default_conf, path_root="."):
     """ Adds all arguments used by a capsule network.

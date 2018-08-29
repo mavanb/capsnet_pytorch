@@ -75,6 +75,7 @@ class DynamicRouting(nn.Module):
                 # in einsum: "bjin, bjn-> bij", inner product over n
                 # in matmul: bji1n, bj1n1 = bji (1n)(n1) = bji1
                 # note: use x=x+1 instead of x+=1 to ensure new object creation and avoid inplace operation
+
                 b_vec = b_vec + torch.matmul(u_hat.view(b, self.j, i, 1, self.n),
                                              v_vec.view(b, self.j, 1, self.n, 1)).view(b, self.j, i)
 
@@ -88,6 +89,7 @@ class DynamicRouting(nn.Module):
 
             if self.log_function:
                 self.log_function(index, u_hat, b_vec, c_vec, v_vec, s_vec, s_vec_bias)
+
         return v_vec, entropy_layer
 
     def sparsify(self, b_vec, iter, target, method, percent, i):

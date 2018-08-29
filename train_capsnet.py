@@ -32,6 +32,8 @@ def main():
     transform = transforms.ToTensor()
     data_train, data_test, data_shape, label_shape = get_dataset(conf.dataset, transform=transform)
 
+    assert conf.architecture.final.caps == label_shape, "Number of final capsule should match the number of labels."
+
     model = BasicCapsNet(in_channels=data_shape[0], routing_iters=conf.routing_iters, in_height=data_shape[1],
                          in_width=data_shape[2], stdev_W=conf.stdev_W, bias_routing=conf.bias_routing,
                          arch=conf.architecture, recon=conf.use_recon, sparse=conf.sparse)

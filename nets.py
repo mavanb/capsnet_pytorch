@@ -1,5 +1,4 @@
 import torch
-from torch.autograd import Variable
 from torch import nn
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, LinearPrimaryLayer, DynamicRouting
 from utils import one_hot, new_grid_size, padding_same_tf, init_weights, flex_profile, get_device
@@ -81,9 +80,11 @@ class _CapsNet(_Net):
         :param labels: [batch_size, 1], if None: use predictions
         :return: [batch_size, num_final_caps * dim_final_caps]
         """
-        targets = labels if type(labels) == Variable else self.compute_predictions(self.compute_logits(final_caps))
-        if type(labels) == Variable:
-            pass
+        # if labels is None:
+        targets = self.compute_predictions(self.compute_logits(final_caps))
+        # else:
+        #     targets = labels
+
         masks = one_hot(targets, self.num_final_caps)
         masked_caps = final_caps * masks[:, :, None]
         decoder_input = masked_caps.view(final_caps.shape[0], -1)
@@ -91,18 +92,41 @@ class _CapsNet(_Net):
 
 
 class ToyCapsNet(_CapsNet):
+    """ Toy Capsule Network to classify
 
-    def __init__(self, in_features, final_caps, vec_len_prim, vec_len_final, routing_iters, prim_caps, bias_routing):
+    The primary capsules are constructed using one linear layer without (no non-linearity) and the squash function. The
+    network has one dense capsule layer.
+
+    The decoder network uses two linear layers with a non linearity in between.
+
+    Args:
+        in_features (int): Number of dims of the input vector.
+        final_caps (int): Number of capsule in the output / Number of classes.
+        final_len (int): Vector length of final capsules.
+        prim_caps (int): Number of primary capsules.
+        prim_len (int): Vector length of the primary capsules.
+        routing_iters (int): Number of routing interations.
+        bias_routing (bool): Add bias to routing yes/no.
+
+
+    """
+
+    def __init__(self, in_features, final_caps, final_len, prim_caps, prim_len, routing_iters, bias_routing, recon, sparse):
         super().__init__(final_caps)
-        self.routing_iters = routing_iters
-        self.primary_caps_layer = LinearPrimaryLayer(in_features, prim_caps, vec_len_prim)
-        self.dense_caps_layer = DenseCapsuleLayer(prim_caps, final_caps, vec_len_prim,
-                                                  vec_len_final, routing_iters, stdev=0.1)
 
-        self.dynamic_routing = None
+        self.routing_iters = routing_iters
+
+        self.primary_caps_layer = LinearPrimaryLayer(in_features, prim_caps, prim_len)
+        self.dense_caps_layer = DenseCapsuleLayer(j=final_caps, i=prim_caps, m=prim_len, n=final_len, stdev=0.1)
+        self.rout_layer = DynamicRouting(j=final_caps, n=final_len, bias_routing=bias_routing, sparse=sparse)
+
+        self.caps_sizes = torch.tensor([final_caps], device=get_device(),
+                                       requires_grad=False)
+
+        self.recon = recon
 
         self.decoder = nn.Sequential(
-            nn.Linear(vec_len_final * final_caps, 52),
+            nn.Linear(final_len * final_caps, 52),
             nn.ReLU(inplace=True),
             nn.Linear(52, in_features),
         )
@@ -112,29 +136,53 @@ class ToyCapsNet(_CapsNet):
         # compute grid of capsules
         primary_caps = self.primary_caps_layer(x)
 
-        # for each capsule in primary layer compute prediction for all next layer capsules
-        all_final_caps = self.dense_caps_layer(primary_caps)
+        # compute for each child a parent prediction
+        all_caps = self.dense_caps_layer(primary_caps)
 
-        # compute digit capsules
-        final_caps, routing_point = self.dynamic_routing(all_final_caps, self.routing_iters, self.b_routing)
+        final_caps, _ = self.rout_layer(all_caps, self.routing_iters)
+
+        # compute the logits by taking the norm
         logits = self.compute_logits(final_caps)
-        decoder_input = self.create_decoder_input(final_caps, t)
-        recon = self.decoder(decoder_input)
 
-        return logits, recon, final_caps, routing_point
+        # flatten final caps and mask all but target if known
+        decoder_input = self.create_decoder_input(final_caps, t)
+
+        # create reconstruction
+        if self.recon:
+            recon = self.decoder(decoder_input)
+        else:
+            recon = None
+
+        return logits, recon, final_caps
 
 
 class BasicCapsNet(_CapsNet):
+    """ Basic capsule network with dynamic architecture.
+
+    Args:
+        in_channels (int): Number of channels of the input imaga.
+        routing_iters (int): Number of iterations of the routing algo.
+        in_height (int): Height of the input image.
+        in_width (int): Width of the input image.
+        stdev_W (float):  Value of the weight initialization of the dense capsule layers.
+        bias_routing (bool): Add bias to routing yes/no.
+        arch (obj Architecture): Architecture of the capsule network.
+        recon (bool): Use reconstruction yes/no.
+        sparse (str):  Sparse method, see docs or config for formatting convention.
+    """
 
     def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
                  arch, recon, sparse):
-        super().__init__(10) #todo remove, retrieve from data
+
+        # init parent CapsNet class with number of capsule in the final layer
+        super().__init__(arch.final.caps)
 
         self.arch = arch
         self.routing_iters = routing_iters
         self.recon = recon
 
-        self.caps_sizes = torch.tensor([l.caps for l in arch.other_layers], device=get_device(),
+        # get capsule sizes from the architecture (arch) and cast to tensor
+        self.caps_sizes = torch.tensor([l.caps for l in arch.all_but_prim], device=get_device(),
                                        requires_grad=False)
 
         prim_caps = arch.prim.caps
@@ -164,7 +212,7 @@ class BasicCapsNet(_CapsNet):
         in_len = arch.prim.len
 
         # loop over all other layers
-        for h in arch.other_layers:
+        for h in arch.all_but_prim:
 
             # set capsules number and length to the current layer output
             out_caps = h.caps
