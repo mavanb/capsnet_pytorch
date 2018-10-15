@@ -10,15 +10,15 @@ sparse_list=(
     nodes_sample_0.3-0.3
     nodes_random_0.3-0.3
     edges_topk_0.3-0.3
-    edges_sample_0.3-0.3
-    edges_random_0.3-0.3
-    nodes_topk_0.2-0.2+edges_random_0.2-0.2
-    nodes_random_0.2-0.2+edges_random_0.2-0.2
-    nodes_topk_0.3-0.3+edges_random_0.3-0.3
-    nodes_sample_0.3-0.3+edges_sample_0.3-0.3
-    edges_random_0.0-0.3
+#    edges_sample_0.3-0.3
+#    edges_random_0.3-0.3
+#    nodes_topk_0.2-0.2+edges_random_0.2-0.2
+#    nodes_random_0.2-0.2+edges_random_0.2-0.2
+#    nodes_topk_0.3-0.3+edges_random_0.3-0.3
+#    nodes_sample_0.3-0.3+edges_sample_0.3-0.3
+#    edges_random_0.0-0.3
     nodes_topk_0.0-0.3
-    edges_random_0.0-0.6
+#    edges_random_0.0-0.6
     nodes_topk_0.0-0.6
 )
 

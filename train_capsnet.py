@@ -36,7 +36,8 @@ def main():
 
     model = BasicCapsNet(in_channels=data_shape[0], routing_iters=conf.routing_iters, in_height=data_shape[1],
                          in_width=data_shape[2], stdev_W=conf.stdev_W, bias_routing=conf.bias_routing,
-                         arch=conf.architecture, recon=conf.use_recon, sparse=conf.sparse)
+                         arch=conf.architecture, recon=conf.use_recon, sparse=conf.sparse,
+                         compute_activation=conf.compute_activation)
 
     capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, conf.beta, num_classes=label_shape,
                                include_recon=conf.use_recon, include_entropy=conf.use_entropy,

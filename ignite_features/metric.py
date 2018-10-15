@@ -76,6 +76,34 @@ class EntropyEpochMetric(Metric):
         return {"layers": layers, "avg": average}
 
 
+class ActivationEpochMetric(Metric):
+
+    # average activations of the second layer
+
+    def __init__(self, output_transform, num_capsules):
+
+        self._batch_avg = np.zeros(num_capsules)
+        self._num_examples = 0
+
+        super().__init__(output_transform)
+
+    def reset(self):
+        self._batch_avg.fill(0)
+        self._num_examples = 0
+
+    def update(self, activation):
+
+        # take mean over the batch index convert to numpy
+        activation = activation.mean(dim=0).cpu().numpy()
+
+        self._batch_avg += activation
+        self._num_examples += 1.0
+
+    def compute(self):
+        avg = self._batch_avg / self._num_examples
+        return avg
+
+
 class EntropyIterMetric(EntropyEpochMetric, IterMetric):
     pass
 

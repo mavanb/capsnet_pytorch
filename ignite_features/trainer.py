@@ -1,19 +1,22 @@
 from __future__ import print_function
 
 import os
+import time
+
 import numpy as np
 import torch
 import visdom
-from ignite.handlers import ModelCheckpoint, EarlyStopping
-from data.data_loader import get_train_valid_data
 from ignite.engines.engine import Events, Engine
-from ignite_features.metric import ValueEpochMetric, ValueIterMetric, TimeMetric, EntropyEpochMetric
-from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
-from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
-from utils import get_device, flex_profile, get_logger, calc_entropy
-from ignite_features.handlers import SaveBestScore
+from ignite.handlers import ModelCheckpoint, EarlyStopping
 from torch.utils.data.sampler import SequentialSampler
-import time
+
+from data.data_loader import get_train_valid_data
+from ignite_features.handlers import SaveBestScore
+from ignite_features.log_handlers import LogTrainProgressHandler, LogEpochMetricHandler
+from ignite_features.metric import ValueEpochMetric, ValueIterMetric, TimeMetric, EntropyEpochMetric, \
+    ActivationEpochMetric
+from ignite_features.plot_handlers import VisEpochPlotter, VisIterPlotter
+from utils import get_device, flex_profile, get_logger, calc_entropy
 
 
 class Trainer:
@@ -62,11 +65,22 @@ class Trainer:
         if conf.use_visdom:
             self.vis = visdom.Visdom()
 
-            # if no connection and should start
-            if (not self.vis.check_connection()) and conf.start_visdom:
-                self._log.info("No visdom connection found. Starting visdom.")
+            # if no connection
+            #
+            #  and should start
+            if conf.start_visdom:
+
                 import subprocess
                 import sys
+
+                # if visdom connection exists kill it
+                if self.vis.check_connection():
+                    self._log.info("Existing visdom connection found. Killed it.")
+
+                    # kill process with process name containing 'visdom.server'.
+                    subprocess.Popen(["pkill", "-f", ".*visdom\.server.*"])
+                else:
+                    self._log.info("No visdom connection found. Starting visdom.")
 
                 # create visdom enviroment path if not exists
                 if not os.path.exists(conf.exp_path):
@@ -154,6 +168,15 @@ class Trainer:
         # print start end testing
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda _: self._log.info("Done testing"))
 
+        # saves models
+        if conf.save_trained:
+            save_path = f"{conf.exp_path}/{conf.trained_model_path}"
+            save_handler = ModelCheckpoint(save_path, conf.model_name,
+                                           score_function=lambda engine: engine.state.metrics["acc"],
+                                           n_saved=conf.n_saved,
+                                           require_empty=False)
+            self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': model})
+
         # add events custom the events
         self._add_custom_events()
 
@@ -164,18 +187,16 @@ class Trainer:
                                                trainer=self.train_engine)
             self.valid_engine.add_event_handler(Events.COMPLETED, early_stop_handler)
 
-        # saves models
-        if conf.save_trained:
-            save_handler = ModelCheckpoint(conf.trained_model_path, conf.model_name, save_interval=1,
-                                           n_saved=conf.n_saved,
-                                           create_dir=True, require_empty=False)
-            self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': model})
-
         # set epoch in state of train_engine to model epoch at start to resume training for loaded model.
         # Note: new models have epoch = 0.
         @self.train_engine.on(Events.STARTED)
         def update_epoch(engine):
             engine.state.epoch = model.epoch
+
+        # update epoch of the model, to make sure the is correct of resuming training
+        @self.train_engine.on(Events.EPOCH_COMPLETED)
+        def update_model_epoch(_):
+            model.epoch += 1
 
         # makes sure eval_engine is started after train epoch, should be after all custom train_engine epoch_completed
         # events
@@ -238,7 +259,7 @@ class CapsuleTrainer(Trainer):
         data = batch[0].to(trainer.device)
         labels = batch[1].to(trainer.device)
 
-        logits, recon, _, entropy = trainer.model(data, labels)
+        logits, recon, _, entropy, _ = trainer.model(data, labels)
 
         total_loss, margin_loss, recon_loss, entropy_loss = trainer.loss(data, labels, logits, recon, entropy)
 
@@ -262,7 +283,7 @@ class CapsuleTrainer(Trainer):
 
             sparse.set_off()
 
-            logits, recon, _, entropy = model(data)
+            logits, recon, _, entropy, _ = model(data)
             loss, _, _, _ = trainer.loss(data, labels, logits, recon, entropy)
 
             acc = trainer.model.compute_acc(logits, labels).item()
@@ -272,7 +293,7 @@ class CapsuleTrainer(Trainer):
             # compute acc on validation set with no sparsity on inference
             if trainer.conf.sparse.is_sparse:
 
-                logits_sparse, _, _, _ = model(data)
+                logits_sparse, _, _, _, _ = model(data)
                 acc_sparse = model.compute_acc(logits_sparse, labels).item()
 
             else:
@@ -293,7 +314,7 @@ class CapsuleTrainer(Trainer):
 
             sparse.set_off()
 
-            logits, _, _, entropy = model(data)
+            logits, _, _, entropy, activations = model(data)
 
             # none sparse metrics
             acc = model.compute_acc(logits, labels).item()
@@ -304,7 +325,7 @@ class CapsuleTrainer(Trainer):
 
             if trainer.conf.sparse.is_sparse:
 
-                logits_sparse, _, _, entropy_sparse = model(data)
+                logits_sparse, _, _, entropy_sparse, activations_sparse = model(data)
 
                 # sparse metrics
                 acc_sparse = model.compute_acc(logits_sparse, labels).item()
@@ -312,11 +333,12 @@ class CapsuleTrainer(Trainer):
                 prob_h_sparse = calc_entropy(model.compute_probs(logits_sparse), dim=1).mean().item()
 
             else:
-                acc_sparse = entropy_sparse = prob_h_sparse = None
+                acc_sparse = entropy_sparse = prob_h_sparse = activations_sparse = None
 
         # return test_dict
         return {"acc": acc, "acc_sparse": acc_sparse, "entropy": entropy, "entropy_sparse": entropy_sparse,
-                "prob_h": prob_h, "prob_h_sparse": prob_h_sparse}
+                "prob_h": prob_h, "prob_h_sparse": prob_h_sparse, "activations": activations,
+                "activations_sparse": activations_sparse}
 
     def _add_custom_events(self):
 
@@ -333,6 +355,12 @@ class CapsuleTrainer(Trainer):
         ValueEpochMetric(lambda x: x["acc"]).attach(self.test_engine, "acc")
         ValueEpochMetric(lambda x: x["prob_h"]).attach(self.test_engine, "prob_h")
 
+        if self.conf.compute_activation:
+            # Add activiation metric, number of capsules in second layer is first of all_but_prim
+            num_caps_layer2 = self.conf.architecture.all_but_prim[0].caps
+            activation_metric = ActivationEpochMetric(lambda x: x["activations"], num_caps_layer2)
+            activation_metric.attach(self.test_engine, "activations")
+
         # Add metric to track entropy
         caps_sizes = self.model.caps_sizes
         entropy_metric = EntropyEpochMetric(lambda x: x["entropy"], caps_sizes, self.conf.routing_iters)
@@ -340,7 +368,11 @@ class CapsuleTrainer(Trainer):
 
         # if sparsity method is used, plot both with and without using this method on inference
         if is_sparse:
-            # Add acc and logit entropy metric
+
+            # Add acc sparse metric to the validation engine
+            ValueEpochMetric(lambda x: x["acc_sparse"]).attach(self.valid_engine, "acc_sparse")
+
+            # Add acc and logit entropy metric to test engine
             ValueEpochMetric(lambda x: x["acc_sparse"]).attach(self.test_engine, "acc_sparse")
             ValueEpochMetric(lambda x: x["prob_h_sparse"]).attach(self.test_engine, "prob_h_sparse")
 
@@ -370,13 +402,31 @@ class CapsuleTrainer(Trainer):
                                  transform=lambda h: h["avg"][-1]) # transform selects the entropy at the last rout iter
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, entropy_plot)
 
-        acc_plot = VisEpochPlotter(vis=self.vis,
+        if self.conf.compute_activation:
+            activations_plot = VisEpochPlotter(vis=self.vis,
+                                     metric_names=["activations"],
+                                     ylabel="||v||",
+                                     title="Activations in 2th layer",
+                                     env_name=self.conf.model_name,
+                                     legend=list(range(num_caps_layer2)),
+                                     use_metric_list=True)
+            self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, activations_plot)
+
+        acc_test_plot = VisEpochPlotter(vis=self.vis,
                                           metric_names=["acc", "acc_sparse"] if is_sparse else "acc",
                                           ylabel="acc",
                                           title="Test Accuracy",
                                           env_name=self.conf.model_name,
                                           legend=legend)
-        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_plot)
+        self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_test_plot)
+
+        acc_valid_plot = VisEpochPlotter(vis=self.vis,
+                                        metric_names=["acc", "acc_sparse"] if is_sparse else "acc",
+                                        ylabel="acc",
+                                        title="Valid Accuracy",
+                                        env_name=self.conf.model_name,
+                                        legend=legend)
+        self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_valid_plot)
 
         if self.conf.print_time:
             TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
@@ -411,6 +461,15 @@ class CapsuleTrainer(Trainer):
                                             root_path=self.conf.exp_path)
                 self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_valid)
                 self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, best_score_handler.update_test)
+
+        # saves models best sparse model as well (sparse on
+        if self.conf.save_trained and is_sparse:
+            save_path = f"{self.conf.exp_path}/{self.conf.trained_model_path}"
+            save_handler = ModelCheckpoint(save_path, f"{self.conf.model_name}_best_sparse",
+                                           score_function=lambda engine: engine.state.metrics["acc_sparse"],
+                                           n_saved=self.conf.n_saved,
+                                           require_empty=False)
+            self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': self.model})
 
 
 class CNNTrainer(Trainer):

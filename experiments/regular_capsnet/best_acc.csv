@@ -1,0 +1,10 @@
+ModelName;EpochBest;EpochsTotal;Sparse;Score
+cifar10_:none:1402:;26;70;none;0.584034
+fashionmnist_:none:1402:;24;70;none;0.90024
+mnist_:none:1402:;59;70;none;0.991787
+cifar10_:none:2402:;19;70;none;0.589744
+fashionmnist_:none:2402:;27;70;none;0.901342
+mnist_:none:2402:;29;70;none;0.992688
+cifar10_:none:3402:;19;70;none;0.584235
+fashionmnist_:none:3402:;19;70;none;0.901743
+mnist_:none:3402:;54;70;none;0.990885

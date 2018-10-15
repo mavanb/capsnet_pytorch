@@ -197,7 +197,7 @@ class Conv2dPrimaryLayer(nn.Module):
         caps_raw = caps_raw.permute(0, 1, 3, 4, 2)  # [b, c, h, w, vec]
 
         # squash on the vector dimension
-        return squash(caps_raw, dim=2)
+        return squash(caps_raw)
 
 
 class DenseCapsuleLayer(nn.Module):

@@ -53,3 +53,7 @@ mnist_:nodes_topk_0.0-0.6:3:411:single:_no;9;30;nodes_topk_0.0-0.6;0.0954527
 mnist_:nodes_topk_0.0-0.6:3:411:single:;9;30;nodes_topk_0.0-0.6;0.100661
 mnist_:nodes_topk_0.0-0.6:3:402:single:_no;15;30;nodes_topk_0.0-0.6;0.98738
 mnist_:nodes_topk_0.0-0.6:3:402:single:;14;30;nodes_topk_0.0-0.6;0.985477
+mnist_:none:2:411:double;26;30;none;0.992889
+mnist_:none:2:402:double;26;30;none;0.99359
+mnist_:none:2:405:double;24;30;none;0.992989
+mnist_:none:3:402:double;30;30;none;0.992788

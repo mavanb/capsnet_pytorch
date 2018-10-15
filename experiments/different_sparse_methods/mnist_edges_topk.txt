@@ -7,7 +7,7 @@ Config File (experiments/different_sparse_methods/caps_ent_test.conf):
   routing_iters:     3
   bias_routing:      False
   sparse_threshold:  0.09999
-  sparse_topk:       0.1;0.3
+  sparse_topk:       0.1&0.3
   stdev_W:           0.1
   architecture:      32,8;10,16;10,16
   use_recon:         True

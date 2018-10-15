@@ -1,0 +1,37 @@
+Command Line Args:   --dataset mnist --model_name mnist_:none:3402: --general_conf experiments/regular_capsnet/gen.conf --capsule_conf experiments/regular_capsnet/caps.conf --seed 3402
+Config File (experiments/regular_capsnet/caps.conf):
+  use_recon:         True
+  alpha:             0.0005
+  m_plus:            0.9
+  m_min:             0.1
+  use_entropy:       False
+  beta:              0.01
+  routing_iters:     3
+  bias_routing:      True
+  sparse:            none
+  stdev_W:           0.1
+  architecture:      32,8;10,16
+Config File (experiments/regular_capsnet/gen.conf):
+  trained_model_path:./trained_models
+  save_trained:      False
+  load_name:         None
+  load_model:        False
+  n_saved:           1
+  visdom_path:       ./visdom
+  save_best:         True
+  score_file_name:   best_acc
+  epochs:            70
+  batch_size:        128
+  drop_last:         True
+  shuffle:           True
+  debug:             False
+  learning_rate:     0.001
+  print_time:        True
+  log_file:          False
+  log_file_name:     None
+  early_stop:        False
+  cudnn_benchmark:   True
+  start_visdom:      True
+  use_visdom:        True
+  valid_size:        0.1
+  exp_name:          regular_capsnet

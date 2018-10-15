@@ -1,0 +1,3 @@
+ModelName;EpochBest;EpochsTotal;Sparse;Score
+mnist_:700epoch:405:;72;700;none;0.992989
+mnist_:700epoch:402:;134;700;none;0.991586

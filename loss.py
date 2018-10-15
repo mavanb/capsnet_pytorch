@@ -23,6 +23,24 @@ class CapsuleLoss(_Loss):
         self.recon_loss = nn.MSELoss(reduce=False)
 
     def forward(self, images, labels, logits, recon, entropy=None):
+        """ Compute the CapsuleLoss.
+
+        Args:
+            images (Tensor): Orginal images. Shape: [batch, channel, height, width].
+            labels (Tensor): Class labels. Shape: [batch]
+            logits (Tensor): Class logits. Length of the final capsules. Shape: [batch, classes]
+            recon (Tensor): Reconstructed image. Same shape as images.
+            entropy (Tensor, optional): Average Entropy per layer per routing iter. Shape: [layer, batch, rout_iter].
+
+        Returns:
+            tuple: tuple containing:
+                total_loss (Tensor): Sum all all losses.
+                margin_loss (Tensor): Margin loss defined in [1].
+                recon_loss (Tensor): MSE loss of the reconstructed image. None if not included.
+                entropy_loss (Tensor): Entropy loss determined by the average entropy in the last routing iter. None if
+                    not included.
+
+        """
         labels_one_hot = one_hot(labels, self.num_classes)
 
         # the factor 0.5 in front of both terms is not in the paper, but used in the source code
@@ -35,7 +53,7 @@ class CapsuleLoss(_Loss):
         margin_loss = margin_loss_per_sample.mean() if self.size_average else margin_loss_per_sample.sum()
 
         if self.include_recon:
-            recon_loss = self.recon_loss(recon, images).sum(dim=-1)
+            recon_loss = self.recon_loss(recon, images).sum(dim=-1).sum(dim=-1)
             if self.size_average:
                 recon_loss = recon_loss.mean()
             else:
@@ -44,7 +62,8 @@ class CapsuleLoss(_Loss):
             recon_loss = None
 
         if self.include_entropy:
-            assert self.caps_sizes, "If include entropy, the size of each capsule layer should be known."
+            if self.caps_sizes is None:
+                raise ValueError("If include entropy, the size of each capsule layer should be known.")
 
             # select entropy of last layer
             last_iter_entropy = entropy[:, :, -1]

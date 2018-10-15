@@ -1,0 +1,7 @@
+ModelName;EpochBest;EpochsTotal;Sparse;Score
+mnist_:new_loss:1407:;19;100;none;0.582632
+mnist_:old_loss:1401:;28;100;none;0.593049
+mnist_:new_loss:2407:;26;100;none;0.596855
+mnist_:new_loss:3407:;46;100;none;0.579227
+mnist_:old_loss:2401:;9;100;none;0.10016
+mnist_:old_loss:3401:;31;100;none;0.584335

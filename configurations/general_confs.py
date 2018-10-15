@@ -75,7 +75,7 @@ class SparseMethods(list):
             target = "none"
             method = None
             percent = None
-        elif len(step_list) == 3:
+        elif len(step_list) > 1:
             target, method, percent_str = step_str.split("_")
             percent = self._parse_percent(percent_str)
             if sum(percent) > 0:
@@ -123,6 +123,7 @@ def capsule_arguments(default_conf, path_root="."):
                             help="Use reconstruction in the total loss yes/no")
         parser.add_argument('--use_entropy', type=parse_bool, required=True, help="Include entropy in the loss yes/no.")
         parser.add_argument('--beta', type=float, required=True, help="The scaling factor of the entropy_loss")
+        parser.add_argument('--compute_activation', type=parse_bool, required=True, help="Compute the activation of second layer yes/no.")
         return parser
     return custom_args
 
@@ -161,8 +162,10 @@ def get_conf(custom_args_list=[], path_root="."):
     # combined configs
     conf.model_checkpoint_path = "{}/{}{}".format(conf.trained_model_path, conf.model_name,
                                                   "_debug" if conf.debug else "")
-    conf.model_load_path = "{}/{}".format(conf.trained_model_path, conf.load_name)
+    conf.model_load_path = f"./experiments/{conf.exp_name}/{conf.trained_model_path}/{conf.load_name}"
     conf.exp_path = f"./experiments/{conf.exp_name}"
+
+    # conf.sparse.
 
     if not os.path.exists(conf.exp_path):
         os.makedirs(conf.exp_path)

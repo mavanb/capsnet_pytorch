@@ -80,10 +80,10 @@ class _CapsNet(_Net):
         :param labels: [batch_size, 1], if None: use predictions
         :return: [batch_size, num_final_caps * dim_final_caps]
         """
-        # if labels is None:
-        targets = self.compute_predictions(self.compute_logits(final_caps))
-        # else:
-        #     targets = labels
+        if labels is None:
+            targets = self.compute_predictions(self.compute_logits(final_caps))
+        else:
+            targets = labels
 
         masks = one_hot(targets, self.num_final_caps)
         masked_caps = final_caps * masks[:, :, None]
@@ -169,10 +169,11 @@ class BasicCapsNet(_CapsNet):
         arch (obj Architecture): Architecture of the capsule network.
         recon (bool): Use reconstruction yes/no.
         sparse (str):  Sparse method, see docs or config for formatting convention.
+        compute_activation (bool): Compute activation of the capsules in second layer, yes/no.
     """
 
     def __init__(self, in_channels, routing_iters, in_height, in_width, stdev_W, bias_routing,
-                 arch, recon, sparse):
+                 arch, recon, sparse, compute_activation):
 
         # init parent CapsNet class with number of capsule in the final layer
         super().__init__(arch.final.caps)
@@ -180,6 +181,8 @@ class BasicCapsNet(_CapsNet):
         self.arch = arch
         self.routing_iters = routing_iters
         self.recon = recon
+        self.sparse = sparse
+        self.compute_activation = compute_activation
 
         # get capsule sizes from the architecture (arch) and cast to tensor
         self.caps_sizes = torch.tensor([l.caps for l in arch.all_but_prim], device=get_device(),
@@ -263,8 +266,10 @@ class BasicCapsNet(_CapsNet):
         caps_input = primary_caps_flat
 
         # list for all routing stats
-        # entropy_list = []
         entropy = torch.zeros(len(self.dense_layers), b, self.routing_iters, device=get_device(), requires_grad=False)
+
+        # init activations of second layer to None
+        activations = None
 
         # loop over the capsule layers
         for layer_idx, (dense_layer, rout_layer) in enumerate(zip(self.dense_layers, self.rout_layers)):
@@ -277,6 +282,10 @@ class BasicCapsNet(_CapsNet):
 
             # entropy_list.append(entropy_stats)
             entropy[layer_idx, :, :] = entropy_layer
+
+            # compute the activations of the capsule in the second capsule layer (after primary caps)
+            if self.compute_activation and layer_idx == 0:
+                activations = self.compute_logits(caps_input)
 
         # final capsule are the output of last layer
         final_caps = caps_input
@@ -293,7 +302,7 @@ class BasicCapsNet(_CapsNet):
         else: 
             recon = None
 
-        return logits, recon, final_caps, entropy
+        return logits, recon, final_caps, entropy, activations
 
 
 class BaselineCNN(_Net):

@@ -13,10 +13,11 @@ Example local:
     im
 Example das4:
     python setup.py install --torch_source True --folder "/var/scratch/blokland"
+    python setup.py install --update_torch True --torch_source True --folder "/var/scratch/pbotros"
 
 To tests if the packages are succesfully isntalled run:
 
-python setup.py tests
+python setup.py test
 
 """
 import os
@@ -25,10 +26,10 @@ import time
 
 parser = argparse.ArgumentParser()
 
-subparsers = parser.add_subparsers(help='use tests or install mode')
+subparsers = parser.add_subparsers(help='use test or install mode')
 
-parser_test = subparsers.add_parser('tests', help='tests whether all packages are installed successfully')
-parser_test.set_defaults(cmd='tests')
+parser_test = subparsers.add_parser('test', help='test whether all packages are installed successfully')
+parser_test.set_defaults(cmd='test')
 
 parser_install = subparsers.add_parser('install', help='install all required packages')
 parser_install.add_argument('--update_torch', type=bool, default=False, help='')
@@ -41,8 +42,8 @@ parser_install.set_defaults(cmd='install')
 config = parser.parse_args()
 
 
-if config.cmd is "tests":
-    # tests all packages:
+if config.cmd is "test":
+    # test all packages:
     try:
         import torch
         import torchvision.datasets.smallnorb
@@ -57,13 +58,16 @@ if config.cmd is "tests":
         exit(1)
 
 
-def git_clone(repo_name, git_url=None):
+def git_clone(repo_name, git_url=None, checkout=None):
     import os
     os.chdir(config.folder)
     os.system(f"rm -f -r {repo_name}")
-    url = git_url if git_url else "https://mavanb:lollie12345@github.com/mavanb/{}".format(repo_name)
+    url = git_url if git_url else "https://mavanb:1Nl2cOcQ@github.com/mavanb/{}".format(repo_name)
     os.system(f"git clone --recursive {url}")
-
+    if checkout:
+        os.system(f"cd {repo_name}")
+        os.system(f"git -C ./{repo_name} checkout {checkout}")
+        os.system("cd ..")
 
 def install_pytorch(update):
     if not update:
@@ -77,7 +81,7 @@ def install_pytorch(update):
             os.system("export CMAKE_PREFIX_PATH='$(dirname $(which conda))/../'")
             os.system("conda install -y numpy pyyaml mkl mkl-include setuptools cmake cffi typing")
             os.system("conda install -y -c pytorch magma-cuda90")
-            git_clone("pytorch", "https://github.com/pytorch/pytorch")
+            git_clone("pytorch", "https://github.com/pytorch/pytorch", checkout="v0.4.0")
             os.system("cd pytorch && python setup.py install && cd ..")
             time.sleep(10)
             print("###### Installed torch ######")
