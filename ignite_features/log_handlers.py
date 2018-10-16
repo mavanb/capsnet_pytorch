@@ -1,3 +1,7 @@
+""" Log Handlers
+
+This module contains all handlers that are used to log info to file or stdout.
+"""
 from abc import abstractmethod
 
 

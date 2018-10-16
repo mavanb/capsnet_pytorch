@@ -1,11 +1,22 @@
+""" Helpers to setup up the configuration.
+
+This module contains all helper functions of the configargparse package to set up the configuration used in training.
+
+"""
+
 import configargparse
 import torch.cuda
 import os
 
 
 def parse_bool(v):
-    """ Bool type to set in add in parser.add_argument to fix not parsing of False. See:
+    """ Parse-able bool type.
+
+    Bool type to set in add in parser.add_argument to fix not parsing of False. See:
     https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+
+    Args:
+        v (str): a string that indicates true ('yes', 'true', 't', 'y', '1') or false ('no', 'false', 'f', 'n', '0').
     """
     import configargparse
     if v.lower().strip() in ('yes', 'true', 't', 'y', '1'):
@@ -14,15 +25,6 @@ def parse_bool(v):
         return False
     else:
         raise configargparse.ArgumentTypeError('Boolean value expected.')
-
-
-def parse_mask_percentage(v):
-    percentages = []
-    for i in v.split("-"):
-        i = float(i)
-        assert 0.0 <= i < 1.0, "Mask percentage should satisfy 0 <= p < 1"
-        percentages.append(i)
-    return percentages
 
 
 class ArchLayer:
@@ -34,6 +36,17 @@ class ArchLayer:
 
 
 class Architecture:
+    """ Used Architecture
+
+    Class to specify the architecture in the config and parse the config string to a object.
+
+
+    Args:
+        arch_str (str): String to specify the architecture. The layers are separated by a ';'. Each layer consists of
+        two numbers seperated by ','. The first specifies the number of capsules, the second the length. In the first
+        layer the number of capsules is multiplied by the size of the grid.
+    """
+
     def __init__(self, arch_str):
 
         arch = arch_str.split(";")
@@ -48,15 +61,29 @@ class Architecture:
 
 
 class SparseMethods(list):
+    """ Sparsity methods
+
+    Class to specify the sparsity methods in the config and parse the config string to a object. Extends a list.
+
+    Args:
+        sparse_str (str): String that describes the sparsity operation. Multiple sparsity methods can be used, these are
+            separated by a '+'. A sparse method can be 'none' to specify no sparsity method. Or sparse methods consists
+            of 3 parts, all seperated by a '_'. A target (nodes or edges), a selection method ('sample', 'random',
+            'topk') and the sparsity ratios. The sparsity ratios are separated by a '-'. The number of sparsity ratios
+            should be: routing iters - 1. Example: nodes_topk_0.3-0.3+nodes_random_0.3-0.3
+
+     Attributes:
+         is_sparse (bool): Bool to indicate of any sparse method is used at any iteration.
+         sparse_str (str): Save the original sparsity string (argument).
+
+    """
 
     def __init__(self, sparse_str):
 
-        # string denote the sparse method
         self.sparse_str = sparse_str
-
-        # bool to indicate of any sparse method is used at any iteration
         self.is_sparse = False
 
+        # init list with all the sparsity methods, get them form the string by splitting on the +
         super().__init__([self._parse_step(e) for e in sparse_str.split("+")])
 
     def set_off(self):
@@ -70,14 +97,26 @@ class SparseMethods(list):
             elem["target"] = elem["target_train"]
 
     def _parse_step(self, step_str):
+        """ Parse a the parts of a sparsity method."""
+
+        # split by _ to get the parts
         step_list = step_str.split("_")
-        if len(step_list) == 1:
+
+        # check if method is none
+        if len(step_list) == 1 and step_list[0] == "none":
             target = "none"
             method = None
             percent = None
-        elif len(step_list) > 1:
-            target, method, percent_str = step_str.split("_")
+        # if not none, lenght should be 3
+        elif len(step_list) == 3:
+
+            # get the parts
+            target, method, percent_str = step_list
+
+            # parse to a percentage
             percent = self._parse_percent(percent_str)
+
+            # check if percentage is large than one and set if sparsity is applied
             if sum(percent) > 0:
                 self.is_sparse = True
         else:
@@ -92,6 +131,7 @@ class SparseMethods(list):
 
     @staticmethod
     def _parse_percent(percent_str):
+        """ Parse the percent string."""
         percent = []
         for i in percent_str.split("-"):
             i = float(i)
@@ -100,11 +140,29 @@ class SparseMethods(list):
         return percent
 
 
-def capsule_arguments(default_conf, path_root="."):
-    """ Adds all arguments used by a capsule network.
+def capsule_arguments(default_conf="", path_root="."):
+    """ Add capsule arguments.
+
+    Args:
+         default_conf (str, optional): Name of the default config file (.conf), located in the configurations folder.
+            Must be given if --general_conf is not passed as an argument in the call of the python module that used the
+            parsers.
+         path_root (str, optional): Root path the the configurations folder.
+
+    Returns:
+        callable: Function that takes a parser as argument and add all arguments listed.
     """
 
     def custom_args(parser):
+        """
+
+        Args:
+            parser (ArgumentParser): parser instance to which the arguments are added.
+
+        Returns:
+            ArgumentParser: parser with the arguments.
+
+        """
         parser.add(f'--capsule_conf', is_config_file=True,
                    default=f"{path_root}/configurations/{default_conf}.conf", help='configurations file path')
         parser.add_argument('--model_name', type=str, required=True, help='Name of the model.')
@@ -125,6 +183,7 @@ def capsule_arguments(default_conf, path_root="."):
         parser.add_argument('--beta', type=float, required=True, help="The scaling factor of the entropy_loss")
         parser.add_argument('--compute_activation', type=parse_bool, required=True, help="Compute the activation of second layer yes/no.")
         return parser
+
     return custom_args
 
 

@@ -1,25 +1,23 @@
-""" Setup up the required packages
+""" Setup up the required packages.
 
 Setup all required packages. Configured for the das4 cluster fs4.das4.science.uva.nl (See https://www.cs.vu.nl/das4/).
 
 First create clean environment using:
-conda create --name name_environment python=3.6
-source activate name_environment
+    'conda create --name name_environment python=3.6'
+    'source activate name_environment'
 
 To update one pytorch or my forks set the relevant update flag to True.
 
 Example local:
-    python setup.py install
-    im
+    'python setup.py install'
+
 Example das4:
-    python setup.py install --torch_source True --folder "/var/scratch/blokland"
-    python setup.py install --update_torch True --torch_source True --folder "/var/scratch/pbotros"
+    'python setup.py install --torch_source True --folder "/var/scratch/blokland"'
 
-To tests if the packages are succesfully isntalled run:
-
-python setup.py test
-
+To tests if the packages are successfully installed run:
+    'python setup.py test'
 """
+
 import os
 import argparse
 import time
@@ -99,7 +97,7 @@ def install_pytorch(update):
                     print("###### Torch mkl intel also failed ######")
                     exit(1)
         else:
-            print("###### Installing torch no CPU ######")
+            print("###### Installing torch no GPU ######")
             os.system("conda install -y pytorch-cpu torchvision-cpu -c pytorch")
 
 

@@ -16,7 +16,7 @@ import torch
 from torch import nn
 from torchvision import transforms
 
-from configurations.general_confs import get_conf, capsule_arguments
+from configurations.conf import get_conf, capsule_arguments
 from data.data_loader import get_dataset
 from ignite_features.trainer import CapsuleTrainer
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, DynamicRouting
@@ -194,7 +194,7 @@ def main():
     conf.epochs = 1
     log.info("Set epochs to 1. Speed check runs for only for 1 epoch.")
 
-    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, num_classes=label_shape, include_recon=conf.use_recon)
+    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, include_recon=conf.use_recon)
 
     print("\n --- Measure training time of Double CapsNet --- \n")
     model = TripleOrDoubleCapsNet(in_channels=data_shape[0], digit_caps=label_shape, vec_len_prim=8, vec_len_digit=16,

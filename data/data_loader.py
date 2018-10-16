@@ -13,25 +13,30 @@ from torchvision.transforms import Compose, Resize, RandomCrop, ToTensor, ColorJ
 
 def get_train_valid_data(data_set, batch_size, seed=None, valid_size=0.1, shuffle=True, num_workers=4,
                          pin_memory=False, train_max=None, valid_max=None, drop_last=False):
-    """
+    """ Get the train and validation data
+
     Utility function for loading and returning train, valid and tests data.
     If using CUDA, num_workers should be set to 1 and pin_memory to True.
 
-    Params
-    ------
-    - data_set: instance of torch Dataset class
-    - batch_size: how many samples per batch to load.
-    - seed: fix seed for reproducibility.
-    - valid_size: percentage split of the training set used for
-      the validation set. Should be a float in the range [0, 1].
-    - shuffle: whether to shuffle the train/validation indices.
-    - num_workers: number of subprocesses to use when loading the dataset.
-    - pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
-      True if using GPU.
-    - train_max: Maximum number of samples in train set, mostly for debugging purposes
-    - valid_max:  .. in valid set, ..
+    Args:
+        data_set: instance of torch Dataset class
+        batch_size: how many samples per batch to load.
+        seed: fix seed for reproducibility.
+        valid_size: percentage split of the training set used for
+            the validation set. Should be a float in the range [0, 1].
+        shuffle: whether to shuffle the train/validation indices.
+        num_workers: number of subprocesses to use when loading the dataset.
+        pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
+            True if using GPU.
+        train_max: Maximum number of samples in train set, mostly for debugging purposes
+        valid_max:  .. in valid set, ..
 
-    Returns: train and valid dataloader
+    Returns:
+        data_train (Dataset): The training data.
+        data_test (Dataset): The test data.
+        data_shape (torch.Size): The shape of the data.
+        labels (int): The number of classes of the data.
+
     """
     error_msg = "[!] valid_size should be in the range [0, 1]."
     assert ((valid_size >= 0) and (valid_size <= 1)), error_msg

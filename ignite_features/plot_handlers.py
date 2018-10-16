@@ -1,16 +1,38 @@
+""" Plot handlers
+
+This module all classes used to generate visdom plots. The abstract VisPlotter is implemented by two classes to plot
+values every epoch or every iteration.
+
+"""
+
 import numpy as np
 import visdom
 from abc import abstractmethod
-from utils import flex_profile
 
 
 class VisPlotter:
-    """ Class to easily make visdom plots. To avoid heaps of if statements in the code the use of visdom is handelled
-    in the class itself. If vis is None, nothing is done. Flex profile showed that the first vis.line call takes a
-    lot of time.
+    """Abstract visdom plot classes.
+
+    Class to easily make visdom plots. To avoid heaps of if statements in the other code the use of visdom is
+    checked in this class. If vis is None, nothing is done. Flex profile showed that the first vis.line call takes a
+    lot of time, so while testing ise recommended to set use_visdom to False in the config.
+
+    Args:
+        vis (Visdom): Connected visdom instance.
+        metric_names (str or list of str): String of the metric name or a list of strings of multiple metric names.
+        ylabel (str): Label of the y-axis.
+        title (str): Title of the plot.
+        env_name (str): Visdom enviroment name.
+        legend (list of str, optional): Names in the legend. Defaults to None.
+        transform: (callable, optional): Transformation applied to the metric. Defaults to a unit transformation.
+        use_metric_list (bool, optional): If True, VisPlotter expects the metric to point to a numpy.ndarray. If False, it expect
+            point to a float. Default to Fals.
     """
 
-    def __init__(self, vis, metric_names, ylabel, title, env_name, legend=None, transform=lambda x:x, use_metric_list=False):
+    def __init__(self, vis, metric_names, ylabel, title, env_name, legend=None, transform=lambda x:x,
+                 use_metric_list=False):
+
+        # initializing visdom plots is slow. To avoid if statements for every added plot vis  can be None
         if vis:
             assert isinstance(vis, visdom.Visdom), "If vis is not None, a Visdom instance should be given as argument"
             assert not use_metric_list or not len(metric_names) > 1, "If use_metric_list, only one metric must be given."
@@ -85,6 +107,7 @@ class VisPlotter:
 
 
 class VisIterPlotter(VisPlotter):
+    """Plot every iteration. """
 
     def get_x_label(self):
         return "# Itertations"
@@ -95,6 +118,7 @@ class VisIterPlotter(VisPlotter):
 
 
 class VisEpochPlotter(VisPlotter):
+    """Plot every epoch. """
 
     def get_x_label(self):
         return "# Epochs"

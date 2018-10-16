@@ -1,3 +1,8 @@
+""" Metrics
+
+This module contains all implementations of the ignite Metric class.
+"""
+
 from __future__ import division
 
 from ignite.exceptions import NotComputableError
@@ -5,8 +10,12 @@ from ignite.metrics.metric import Metric
 from ignite.engines import Events
 import numpy as np
 
+
 class IterMetric(Metric):
-    """ Abstract class of Metric that is computed and reset at the end of every iteration. """
+    """ Abstract class of iteration Metric
+
+    Metric that is computed and reset at the end of every iteration instead after each epoch.
+    """
 
     def attach(self, engine, name):
         engine.add_event_handler(Events.ITERATION_STARTED, self.started)
@@ -15,9 +24,11 @@ class IterMetric(Metric):
 
 
 class ValueEpochMetric(Metric):
-    """
+    """ Metric that computes single value every epoch.
+
     Calculates the average of some value that must be average of the number of batches per epoch.
     """
+
     def reset(self):
         self._sum = 0
         self._num_examples = 0
@@ -39,10 +50,10 @@ class ValueIterMetric(ValueEpochMetric, IterMetric):
 
 
 class EntropyEpochMetric(Metric):
+    """ Entropy metric per epoch
 
-    # entropy per layer per routing iter
-    # entropy average correct for size per routing iter
-
+    Entropy per layer per routing iter and entropy average correct for capsule size per routing iter.
+    """
     def __init__(self, output_transform, sizes, iters):
 
         self.sizes = sizes.cpu().numpy()
@@ -77,8 +88,7 @@ class EntropyEpochMetric(Metric):
 
 
 class ActivationEpochMetric(Metric):
-
-    # average activations of the second layer
+    """Average activations of the second layer """
 
     def __init__(self, output_transform, num_capsules):
 

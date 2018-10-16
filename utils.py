@@ -1,3 +1,11 @@
+""" Utils
+
+General functions used throughout the project.
+
+References:
+    [1] S. Sabour, N. Frosst, and G. E. Hinton, “Dynamic routing between capsules,” in NIPS, pp. 3859–3869, 2017.
+"""
+
 import torch
 import math
 import logging
@@ -5,15 +13,12 @@ import sys
 
 
 def flex_profile(func):
-    """ Decorator for the @proflile decorator of kernprof. Avoids having to remove it all the time.
+    """ Decorator for the @proflile decorator of kernprof.
 
-    To profile run: kernprof -v -l train_capsnet.py
-
-    Make sure to first put @profile (should be removed afterwards) or @flex_profile (no need to remove) decorators above
-    the functions you want to profile.
-
-    Note: I profilled the effect of this decorator itself: decorator is only called on function init. Thus, only do not
-    use in frequently called nested functions (in others words, if the function is instantiated very often.)
+    Slightly hacky solution to have avoid having to remove the profile decorator of kernprof all the time. To profile
+    run: 'kernprof -v -l train_capsnet.py'. Make sure to first put @profile (should be removed afterwards) or
+    @flex_profile (no need to remove) decorators above the functions you want to profile. Decorator does hardly hardly
+    influences computation time, but use for nested functions that are called very often.
     """
     try:
         func = profile(func)
@@ -21,17 +26,36 @@ def flex_profile(func):
         pass
     return func
 
+
 def new_grid_size(grid, kernel_size, stride=1, padding=0):
     """ Calculate new images size after convoling.
-    Used formula from: https://adeshpande3.github.io/A-Beginner%27s-Guide-To-Understanding-Convolutional-Neural-
-    Networks-Part-2/
+
+    Function calculated the size of the grid after convoling an image or feature map. Used formula from:
+    https://adeshpande3.github.io/A-Beginner%27s-Guide-To-Understanding-Convolutional-Neural-Networks-Part-2/
+
+    Args:
+        grid (tuple of ints): Tuple with 2 ints of the dimensions of the orginal grid size.
+        kernel_size (int): Size of the kernel (is a square).
+        stride (int, optional): Stride used.
+        padding (int, optional): Padding used.
     """
     def calc(x): return int((x - kernel_size + 2 * padding)/stride + 1)
     return calc(grid[0]), calc(grid[1])
 
 
 def padding_same_tf(grid, kernel, stride):
-    """ TensorFlow padding SAME corresponds to padding such that: output size = ceil(input/stride)"""
+    """ Calculate the padding to mimic tensorflow
+
+    TensorFlow padding SAME corresponds to padding such that: output size = ceil(input/stride)
+
+    Args:
+        grid: (tuple of ints): Tuple with 2 ints of the dimensions of the orginal grid size.
+        kernel: (int): Size of the kernel (is a square).
+        stride: (int, optional): Stride used.
+
+    Returns
+        int: padding used if the padding SAME of tensorflow was used.
+    """
     def calc(x):
         out_size = math.ceil(x / stride)
         return int(((out_size - 1) * stride + kernel - x) / 2)
@@ -39,6 +63,12 @@ def padding_same_tf(grid, kernel, stride):
 
 
 def squash(tensor, dim=-1):
+    """ Squash function as defined in [1].
+
+    Args:
+        tensor (Tensor): Input tensor.
+        dim (int, optional): Dimension on which to apply the squash function. Vector dimension. Defaults to the last.
+    """
     squared_norm = (tensor ** 2).sum(dim=dim, keepdim=True)
     scale = squared_norm / (1. + squared_norm)
     return scale * tensor / torch.sqrt(squared_norm + 1e-7)
@@ -49,7 +79,7 @@ def calc_entropy(input_tensor, dim):
 
     Args:
         input_tensor: (tensor) Input tensor.
-        dim: Dimension over which the entropy is calculated. All entries over this dimension should sum to 1.
+        dim (int): Dimension over which the entropy is calculated. All entries over this dimension should sum to 1.
 
     Returns:
     """
@@ -68,61 +98,58 @@ def get_approx_value(input_tensor, value, precision=1e6):
     """ Get all entries that equal a certain value approximately.
 
     Args:
-        input_tensor: (tensor) tensor to compare against of any size
-        value: (float) value to compare to
-        precision: (float) precision of comparision
+        input_tensor (tensor): Tensor to compare against of any size.
+        value (float): Value to compare to.
+        precision (float): Precision of comparision.
 
-    Returns: (tensor) bool tensor of same size as input indication which entries are approx equal
-
+    Returns:
+        ByteTensor: bool tensor of same size as input indication which entries are approx equal
     """
     return (input_tensor * precision).round() == value * precision
 
 
 def one_hot(labels, depth):
     """ Create one-hot encoding matrix from vector of labels/indices.
-    :param labels: 1D-tensor or 1D-Variable
-    :param depth: output length of one hot vectors i.e. number of classes
-    :return: 2D-tensor or 2D-Variable (depending on input) of shape [len(labels), depth]
+
+    PyTorch does not have a one-hot function like tensorflow.
+
+    Args:
+        labels (LongTensor): Tensor of labels of shape: [batch_size].
+        depth (int): Output length of one hot vectors i.e. number of classes.
+
+    Returns:
+        FloatTensor: Tensor of shape [batch_size, depth] with a one-hot representation of the labels.
     # """
     return torch.eye(depth, device=get_device()).index_select(dim=0, index=labels)
 
 
 def init_weights(module, weight_mean=0, weight_stddev=0.1, bias_mean=0.1):
+    """ Init weights of torch.module. """
     module.weight.data.normal_(weight_mean, weight_stddev)
     module.bias.data.fill_(bias_mean)
     return module
 
 
-def convert_grid_index_to_flat(tot_caps, tot_height, tot_width):
-    """ Given grid size and number of channels returns function that gives all indices that come from a certain postion
-    in the old grid."""
-    def convert(height, width):
-        """ Height, width are the ocation of in the grid, returns the indices in the flattened vector."""
-        return [caps_idx * tot_height * tot_width + height * tot_width + width for caps_idx in range(tot_caps)]
-    return convert
-
-
 def get_device():
+    """ Get the device on which running."""
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def get_logger(name):
-        logger = logging.getLogger(name)
-        handler = logging.StreamHandler(sys.stdout)
-        # formatter = logging.Formatter(
-        #     '%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
-        # handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        return logger
+    """Get info logger that logs to stdout."""
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler(sys.stdout)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
 
 
 def batched_index_select(input, dim, index):
     """ Select indices batch_wise.
-    Resources:
 
-    https://discuss.pytorch.org/t/batched-index-select/9115/8
-    https://stackoverflow.com/questions/49104307/indexing-on-axis-by-list-in-pytorch
+    Code based on:
+        https://discuss.pytorch.org/t/batched-index-select/9115/8
+        https://stackoverflow.com/questions/49104307/indexing-on-axis-by-list-in-pytorch
 
     Args:
         input: (tensor) input tensor of size: batch x .. x N x ..
@@ -142,6 +169,22 @@ def batched_index_select(input, dim, index):
 
 
 def multinomial_nd(input, num_samples, dim, replacement=False):
+    """ Sample from a multinomial distribution.
+
+    PyTorch does not support sampling form a multinomial distribution of more than 2 dimensions and has no dim argument
+    (in version v0.4). Therefore, for 2 dimensions, we use a tensor permutation. For 3 dimensions we use a permutation
+    and a for loop. Remains a relatively light computation.
+
+    Args:
+        input (Tensor): Input tensor.
+        num_samples: Number of samples to sample.
+        dim (int): Dimension which contains the parameters of the multinomial distribution.
+        replacement (bool, optional): Sample with replacement yes/no.
+
+    Returns:
+        LongTensor: Tensor with the indices of the sampled categories and how often.
+
+    """
     assert isinstance(dim, int), "dim should be int"
     assert num_samples <= input.shape[dim], "Num samples should be smaller than length of input in the sample dimension"
 

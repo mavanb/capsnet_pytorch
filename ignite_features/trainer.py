@@ -1,3 +1,10 @@
+""" Module with ignite trainers
+
+Contains an abstract Trainer class which handles most required features of a deep learning training process. The class
+uses ignite as an engine to train the model. The trainer class must be implemented by a class that implements the train,
+valid and test functions. Optionally, additional custom events can be specified in the add_custom_events function.
+"""
+
 from __future__ import print_function
 
 import os
@@ -20,12 +27,13 @@ from utils import get_device, flex_profile, get_logger, calc_entropy
 
 
 class Trainer:
-    """ Helper class to support a ignite training process. Call run to start training.
 
-    Main tasks:
+    """ Abstract Trainer class.
+
+    Helper class to support a ignite training process. Call run to start training. The main tasks are:
         - init visdom
         - set seed
-        - log model architecture and parametres
+        - log model architecture and parameters to file or console
         - limit train / valid samples in debug mode
         - split train data into train and validation
         - load model if required
@@ -34,7 +42,7 @@ class Trainer:
         - add default events: model saving (each epoch), early stopping, log training progress
         - calls the validate engine after each training epoch, which runs one epoch.
 
-    Function to be implemented:
+    When extending this class, implement the following functions:
     - _add_custom_events: function adds events specific to a child class to the engines.
     - _train_function: executes a training step. It takes the ignite engine, this class and the current batch as
         arguments. Should return a dict with keys:
@@ -43,12 +51,12 @@ class Trainer:
             - any key that is expected by the custom events of the child class
     - _validate_function: same as _train_function, but for validate
 
-    Arguments:
-    :param model: model to be trained
-    :param loss: loss of the model
-    :param optimizer: optimizer used in gradient update
-    :param dataset: dataset of torch.Dataset class
-    :param conf: configuration obtained using config_utils.get_conf_logger
+    Args:
+        model (_Net): model/network to be trained.
+        loss (_Loss): loss of the model
+        optimizer (Optimizer): optimizer used in gradient update
+        dataset (Dataset): dataset of torch.Dataset class
+        conf (Namespace): configuration obtained using configurations.general_confs.get_conf
     """
 
     def __init__(self, model, loss, optimizer, data_train, data_test, conf):
@@ -65,9 +73,7 @@ class Trainer:
         if conf.use_visdom:
             self.vis = visdom.Visdom()
 
-            # if no connection
-            #
-            #  and should start
+            # start visdom if in conf
             if conf.start_visdom:
 
                 import subprocess
@@ -99,15 +105,14 @@ class Trainer:
                 else:
                     raise RuntimeError("Could not start Visdom")
 
-            # if no connection and shouldn't start
-            elif not self.vis.check_connection():
-                raise RuntimeError("Start visdom manually or set start_visdom to True")
-
-            else:
+            # if use existing connection
+            elif self.vis.check_connection():
                 self._log.info("Use existing Visdom connection")
+
+            # if no connection and not start
+            else:
+                raise RuntimeError("Start visdom manually or set start_visdom to True")
         else:
-            # initializing visdom plots is slow.To avoid if statements for every added plot init vis as None
-            # and handle this within the VisPlotter class.
             self.vis = None
 
         # print number of parameters in model
@@ -126,9 +131,13 @@ class Trainer:
         self.test_loader = torch.utils.data.DataLoader(data_test, batch_size=conf.batch_size, drop_last=conf.drop_last,
                                                        sampler=test_debug_sampler, **cuda_kwargs)
 
+        # model to cude if device is gpu
         model.to(self.device)
+
+        # optimize cuda
         torch.backends.cudnn.benchmark = conf.cudnn_benchmark
 
+        # load model
         if conf.load_model:
             if os.path.isfile(conf.model_load_path):
                 if torch.cuda.is_available():
@@ -139,6 +148,7 @@ class Trainer:
             else:
                 self._log.info("No model to load found. Start training new model.")
 
+        # init an ignite engine for each data set
         self.train_engine = Engine(self._train_function, self)
         self.valid_engine = Engine(self._valid_function, self)
         self.test_engine = Engine(self._test_function, self)
@@ -147,12 +157,15 @@ class Trainer:
         ValueIterMetric(lambda x: x["loss"]).attach(self.train_engine, "batch_loss")  # for plot and progress log
         ValueIterMetric(lambda x: x["acc"]).attach(self.train_engine, "batch_acc")  # for plot and progress log
 
-        self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                            VisIterPlotter(self.vis, "batch_loss", "Loss", "Training Batch Loss", self.conf.model_name))
-        self.train_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                            VisIterPlotter(self.vis, "batch_acc", "Acc", "Training Batch Acc", self.conf.model_name))
+        # add visdom plot for the training loss
+        training_loss_plot = VisIterPlotter(self.vis, "batch_loss", "Loss", "Training Batch Loss", self.conf.model_name)
+        self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, training_loss_plot)
 
-        # add logs handlers, requires batch_loss and batch_acc metrics
+        # add visdom plot for the training accuracy
+        training_acc_plot = VisIterPlotter(self.vis, "batch_acc", "Acc", "Training Batch Acc", self.conf.model_name)
+        self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, training_acc_plot)
+
+        # add logs handlers, requires the batch_loss and batch_acc metrics
         self.train_engine.add_event_handler(Events.ITERATION_COMPLETED, LogTrainProgressHandler())
 
         # add valid metrics
@@ -165,7 +178,7 @@ class Trainer:
         self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED,
                                             LogEpochMetricHandler('Validation set: {:.4f}', "acc"))
 
-        # print start end testing
+        # print end testing
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda _: self._log.info("Done testing"))
 
         # saves models
@@ -177,7 +190,7 @@ class Trainer:
                                            require_empty=False)
             self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': model})
 
-        # add events custom the events
+        # add events custom events of the child class
         self._add_custom_events()
 
         # add early stopping, use total loss over epoch, stop if no improvement: higher score = better
@@ -230,6 +243,7 @@ class Trainer:
                 self.vis.save([self.conf.model_name])
 
     def run(self):
+        """ Start the training process. """
         self.train_engine.run(self.train_loader, max_epochs=self.conf.epochs)
 
     def _add_custom_events(self):
@@ -249,6 +263,10 @@ class Trainer:
 
 
 class CapsuleTrainer(Trainer):
+    """ Trainer of a capsule network.
+
+
+    """
 
     @staticmethod
     @flex_profile
@@ -381,6 +399,7 @@ class CapsuleTrainer(Trainer):
                                                 self.conf.routing_iters)
             entropy_metric_sparse.attach(self.test_engine, "entropy_sparse")
 
+        # plot entropy of the softmax of logits
         prob_h = VisEpochPlotter(vis=self.vis,
                                  metric_names=["prob_h", "prob_h_sparse"] if is_sparse else "prob_h" ,
                                  ylabel="H",
@@ -392,7 +411,6 @@ class CapsuleTrainer(Trainer):
         # Add metric and plots to track the mean entropy of the weights after routing
         # if sparsity method is used, plot both with and without using this method on inference
         # plot the entropy at the last routing iteration, the last index is routing_iters-1
-
         entropy_plot = VisEpochPlotter(vis=self.vis,
                                  metric_names=["entropy", "entropy_sparse"] if is_sparse else "entropy",
                                  ylabel="H",
@@ -412,6 +430,7 @@ class CapsuleTrainer(Trainer):
                                      use_metric_list=True)
             self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, activations_plot)
 
+        # test acc plot
         acc_test_plot = VisEpochPlotter(vis=self.vis,
                                           metric_names=["acc", "acc_sparse"] if is_sparse else "acc",
                                           ylabel="acc",
@@ -420,6 +439,7 @@ class CapsuleTrainer(Trainer):
                                           legend=legend)
         self.test_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_test_plot)
 
+        # valid acc plot
         acc_valid_plot = VisEpochPlotter(vis=self.vis,
                                         metric_names=["acc", "acc_sparse"] if is_sparse else "acc",
                                         ylabel="acc",
@@ -428,11 +448,13 @@ class CapsuleTrainer(Trainer):
                                         legend=legend)
         self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, acc_valid_plot)
 
+        # print ms per training example
         if self.conf.print_time:
             TimeMetric(lambda x: x["time"]).attach(self.train_engine, "time")
             self.train_engine.add_event_handler(Events.EPOCH_COMPLETED, LogEpochMetricHandler(
                 'Time per example: {:.6f} ms', "time"))
 
+        # save test acc of the best validition epoch to file
         if self.conf.save_best:
 
             # add _no to models where sparsify is turned off
@@ -472,6 +494,7 @@ class CapsuleTrainer(Trainer):
             self.valid_engine.add_event_handler(Events.EPOCH_COMPLETED, save_handler, {'': self.model})
 
 
+#TODO remove?
 class CNNTrainer(Trainer):
 
     @staticmethod

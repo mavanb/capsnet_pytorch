@@ -4,7 +4,7 @@ import torch
 from torch.nn.modules.loss import NLLLoss
 from torchvision import transforms
 
-from configurations.general_confs import get_conf
+from configurations.conf import get_conf
 from data.data_loader import get_dataset
 from ignite_features.trainer import CNNTrainer
 from nets import BaselineCNN

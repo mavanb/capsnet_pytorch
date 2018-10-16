@@ -1,7 +1,7 @@
+""" General ignite handlers. """
+
 import logging
 import os
-from ignite.engines import Engine
-
 
 class SaveBestScore:
     """SaveBestScore handler can be used to save the best score to file (high score is considered better).

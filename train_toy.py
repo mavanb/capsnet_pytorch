@@ -13,10 +13,18 @@ from loss import CapsuleLoss
 from nets import ToyCapsNet
 from utils import get_device
 from utils import get_logger
-from configurations.general_confs import SparseMethods, parse_bool
+from configurations.conf import SparseMethods, parse_bool
 
 
 def toy_args(parser):
+    """
+
+    Args:
+        parser:
+
+    Returns:
+
+    """
     parser.add('--toy_capsnet_config', is_config_file=True, default="configurations/toy_capsnet.conf",
                help='configurations file path')
     parser.add_argument('--output_file', type=str, required=True, help='Name of output file (routing points pickle)')
@@ -159,9 +167,8 @@ def main():
     if torch.cuda.is_available():
         model.cuda()
 
-    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, 0, num_classes=2,
-                               include_recon=conf.use_recon, include_entropy=False,
-                               caps_sizes=[2])
+    capsule_loss = CapsuleLoss(conf.m_plus, conf.m_min, conf.alpha, 0, include_recon=conf.use_recon,
+                               include_entropy=False, caps_sizes=[2])
 
     optimizer = torch.optim.Adam(model.parameters())
 
