@@ -35,7 +35,7 @@ Config File (./configurations/general.conf):
   early_stop:        False
   cudnn_benchmark:   True
   learning_rate:     0.001
-  start_visdom:      True
+  start_visdom:      False
   use_visdom:        True
   exp_name:          test
 Defaults:

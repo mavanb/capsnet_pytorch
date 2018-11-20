@@ -1,2 +1,6 @@
 ModelName;EpochBest;EpochsTotal;Sparse;Score
 
+cifar10_:none:1407:;32;70;none;0.639323
+cifar10_:nodes_topk_0.0-0.6:1407:_no;16;70;nodes_topk_0.0-0.6;0.652945
+cifar10_:nodes_topk_0.0-0.6:1407:;15;70;nodes_topk_0.0-0.6;0.654147
+cifar10_:none:2407:;26;70;none;0.652544
