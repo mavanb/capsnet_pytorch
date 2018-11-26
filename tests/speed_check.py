@@ -18,7 +18,7 @@ from torchvision import transforms
 
 from configurations.conf import get_conf, capsule_arguments
 from data.data_loader import get_dataset
-from ignite_features.trainer import CapsuleTrainer
+from capsule_trainer import CapsuleTrainer
 from layers import Conv2dPrimaryLayer, DenseCapsuleLayer, DynamicRouting
 from loss import CapsuleLoss, _Loss
 from nets import _CapsNet, CapsNetDecoder

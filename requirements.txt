@@ -1,0 +1,10 @@
+ignite_features==0.1.9
+ConfigArgParse==0.13.0
+pytorch-ignite==0.1.1
+line_profiler==2.1.2
+matplotlib==3.0.2
+numpy==1.15.4
+scipy==1.1.0
+torch==0.4.1
+torchvision==0.2.1
+visdom==0.1.8.5

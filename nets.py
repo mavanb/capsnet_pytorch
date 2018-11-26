@@ -404,10 +404,6 @@ class CapsNetDecoder(nn.Module):
         return self.reconstruct(flat_final_caps).view(-1, self.in_channels, self.in_height, self.in_width)
 
 
-
-
-
-#TODO: remove
 class BaselineCNN(_Net):
     """
     Convnet as implemented in https://github.com/Sarasra/models/blob/master/research/capsules/models/conv_model.py.

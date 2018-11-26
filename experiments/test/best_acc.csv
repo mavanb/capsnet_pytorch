@@ -1,5 +1,1 @@
-ModelName;EpochBest;EpochsTotal;Sparse;Score
-test_caps_no;2;2;nodes_topk_0.3-0.3;0.401042
-test_caps;2;2;nodes_topk_0.3-0.3;0.421875
-test_caps_no;2;2;nodes_topk_0.3-0.3;0.401042
-test_caps;2;2;nodes_topk_0.3-0.3;0.421875
+ModelName;EpochBest;EpochsTotal;Score

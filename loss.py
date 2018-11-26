@@ -24,12 +24,10 @@ class CapsuleLoss(_Loss):
         include_entropy (bool): Use the additional entropy penalty.
         caps_sizes (LongTensor, optional): Specifies the number of capsules in the non-primary capsule layers. Default
             None, but should be given in include_entropy. Shape: num layers.
-        size_average (bool, optional): Average the loss over the batch_size yes/no. [1] does average. Defaults to True.
     """
 
-    def __init__(self, m_plus, m_min, alpha, beta, include_recon, include_entropy, caps_sizes=None,
-                 size_average=True):
-        super(CapsuleLoss, self).__init__(size_average)
+    def __init__(self, m_plus, m_min, alpha, beta, include_recon, include_entropy, caps_sizes=None):
+        super(CapsuleLoss, self).__init__()
 
         self.m_plus = m_plus
         self.m_min = m_min
@@ -41,7 +39,7 @@ class CapsuleLoss(_Loss):
         self.caps_sizes = caps_sizes
 
         # init mean square error loss
-        self.recon_loss = nn.MSELoss(reduce=False)
+        self.recon_loss = nn.MSELoss(reduction="none")
 
     def forward(self, images, labels, logits, recon, entropy=None):
         """ Forward pass.
@@ -72,7 +70,7 @@ class CapsuleLoss(_Loss):
         # the factor 0.5 is the downweight mentioned in the Margin loss in [1]
         margin_loss = labels_one_hot * present_loss + 0.5 * (1. - labels_one_hot) * absent_loss
         margin_loss_per_sample = margin_loss.sum(dim=1)
-        margin_loss = margin_loss_per_sample.mean() if self.size_average else margin_loss_per_sample.sum()
+        margin_loss = margin_loss_per_sample.mean()
 
         if self.include_recon:
 
@@ -81,10 +79,7 @@ class CapsuleLoss(_Loss):
             assert len(recon_loss.shape) == 1, "Only batch dimension should be left after in recon loss."
 
             # average of sum over batch dimension
-            if self.size_average:
-                recon_loss = recon_loss.mean()
-            else:
-                recon_loss = recon_loss.sum()
+            recon_loss = recon_loss.mean()
         else:
             recon_loss = None
 

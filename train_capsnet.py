@@ -12,22 +12,19 @@ from __future__ import print_function
 import torch
 from torchvision import transforms
 
-from configurations.conf import get_conf, capsule_arguments
+from configurations import get_conf
 from data.data_loader import get_dataset
-from ignite_features.trainer import CapsuleTrainer
 from nets import BasicCapsNet
 from loss import CapsuleLoss
 from utils import get_logger
 import numpy as np
+from capsule_trainer import CapsuleTrainer
 
 
 def main():
 
-    # get arguments specific for capsule network
-    custom_args = capsule_arguments("capsnet")
-
     # get general config
-    conf, parser = get_conf(custom_args)
+    conf, parser = get_conf()
 
     # get logger and log config
     log = get_logger(__name__)

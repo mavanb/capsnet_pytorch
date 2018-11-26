@@ -62,14 +62,14 @@ The main modules in this project are:
 * [train_capsnet.py](./train_capsnet.py): train an instance of the BasicCapsNet
 
 To handle the PyTorch training process, we use [ignite](https://github.com/pytorch/ignite). All supporting modules are 
-in [ignite_features](./ignite_features) package. [trainer.py](./ignite_features/trainer.py) contains the abstract 
+in [ignite_features](ignite_features_old) package. [trainer.py](ignite_features_old/trainer.py) contains the abstract 
 Trainer class. It adds all commonly used handlers and supports a train, validation and test step. Other trainers (such 
 the CapsuleTrainer), extend this class and implement the train, valid and test functions. Optionally add custom handlers. 
 Other modules are: 
-* [plot_handlers.py](./ignite_features/plot_handlers.py) handles to make standard visdom plots
-* [metric.py](./ignite_features/metric.py) custom ignite metrics 
-* [log_handlers.py](./ignite_features/log_handlers.py) all handlers used for logging
-* [handlers.py](./ignite_features/handlers.py) general handlers
+* [plot_handlers.py](ignite_features_old/plot_handlers.py) handles to make standard visdom plots
+* [metric.py](ignite_features_old/metric.py) custom ignite metrics 
+* [log_handlers.py](ignite_features_old/log_handlers.py) all handlers used for logging
+* [handlers.py](ignite_features_old/handlers.py) general handlers
 
 The default configurations files are placed in the [configurations](./configurations) package. 
 [conf.py](./configurations/conf.py) processes these files. 

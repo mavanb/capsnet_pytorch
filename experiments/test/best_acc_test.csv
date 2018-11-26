@@ -1,7 +1,0 @@
-ModelName;EpochBest;EpochsTotal;Sparse;Score
-mnist_:nodes_topk_0.3-0.3:8,8;60,16;10,16:411:_no;85;100;nodes_topk_0.3-0.3;0.992388
-mnist_:nodes_topk_0.3-0.3:8,8;60,16;10,16:411:;48;100;nodes_topk_0.3-0.3;0.993389
-mnist_:nodes_topk_0.3-0.3:8,8;60,16;10,16:411:_no;85;100;nodes_topk_0.3-0.3;0.992388
-mnist_:nodes_topk_0.3-0.3:8,8;60,16;10,16:411:;48;100;nodes_topk_0.3-0.3;0.993389
-mnist_:nodes_topk_0.3-0.3:8,8;60,16;10,16:411:_no;85;100;nodes_topk_0.3-0.3;0.992388
-mnist_:nodes_topk_0.3-0.3:8,8;60,16;10,16:411:;48;100;nodes_topk_0.3-0.3;0.993389

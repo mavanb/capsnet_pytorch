@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
-from torchvision.datasets import MNIST, CIFAR10, SmallNORB, FashionMNIST
+from torchvision.datasets import MNIST, CIFAR10, FashionMNIST
 from torchvision.transforms import Compose, Resize, RandomCrop, ToTensor, ColorJitter, Normalize
 
 
@@ -85,30 +85,18 @@ def get_dataset(dataset_name, transform=ToTensor()):
         data_train = CIFAR10(download=True, root="./data/cifar10", transform=transform, train=True)
         data_test = CIFAR10(download=True, root="./data/cifar10", transform=transform, train=False)
         labels = 10
-    elif dataset_name == "smallnorb":
-        transform = Compose([
-            Resize(48),
-            ColorJitter(brightness=0.247, contrast=0.8),  #convert brightness 	63/255=0.247
-            RandomCrop(32),
-            ToTensor(),
-            Normalize([0], [1])
-        ])
-        data_train = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=True, mode="all")
-        data_test = SmallNORB(download=True, root="./data/smallnorb", transform=transform, train=False, mode="all")
-        labels = 5
     elif dataset_name == "fashionmnist":
         data_train = FashionMNIST(download=True, root="./data/fashionmnist", transform=transform, train=True)
         data_test = FashionMNIST(download=True, root="./data/fashionmnist", transform=transform, train=False)
         labels = 10
     else:
-        raise ValueError("Name dataset does not exists.")
+        raise ValueError("Name dataset does not exists. Use: cifar10, fashionmnist, mnist.")
 
     # check if shape of data instances is the same in tests and train
     assert data_train[0][0].shape == data_test[0][0].shape
     data_shape = data_train[0][0].shape
 
     return data_train, data_test, data_shape, labels
-
 
 
 
